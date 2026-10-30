@@ -300,6 +300,38 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
   )
 }
 
+/** A role's bullets: each can be edited or removed, and new ones added. */
+function Bullets({ items, onChange }: { items: string[]; onChange: (items: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const v = draft.trim()
+    if (v) onChange([...items, v])
+    setDraft('')
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 2 }}>
+      {items.map((b, k) => (
+        <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <span className="muted" style={{ fontSize: 13, lineHeight: 1.45 }}>•</span>
+          <textarea
+            className="text-input"
+            rows={Math.min(5, Math.ceil(b.length / 60))}
+            style={{ padding: 0, fontSize: 13, lineHeight: 1.45, resize: 'none', flex: 1 }}
+            value={b}
+            aria-label={`Bullet ${k + 1}`}
+            onChange={(e) => onChange(items.map((x, j) => (j === k ? e.target.value : x)))}
+            onBlur={() => !b.trim() && onChange(items.filter((_, j) => j !== k))}
+          />
+          <button className="circle-btn" style={{ width: 22, height: 22, fontSize: 10 }} aria-label="Remove bullet" onClick={() => onChange(items.filter((_, j) => j !== k))}>✕</button>
+        </div>
+      ))}
+      <form onSubmit={(e) => { e.preventDefault(); add() }}>
+        <input className="text-input" style={{ padding: '4px 0', fontSize: 13 }} placeholder={items.length ? '+ Add another point' : '+ Add what you did here'} aria-label="Add a bullet" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} />
+      </form>
+    </div>
+  )
+}
+
 export function Review() {
   const { s, set } = useApp()
   const p = useProfile()
@@ -336,16 +368,33 @@ export function Review() {
         </div>
       </div>
       <div>
+        <div className="eyebrow" style={{ marginBottom: 10 }}>SUMMARY</div>
+        <textarea
+          className="text-input"
+          style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px', background: 'var(--card)', minHeight: 84, resize: 'vertical', lineHeight: 1.45, fontSize: 13.5 }}
+          value={p.summary ?? ''}
+          placeholder="A few sentences about you, in your own words. Used at the top of every tailored resume."
+          aria-label="Summary"
+          onChange={(e) => edit({ summary: e.target.value })}
+        />
+      </div>
+      <div>
         <div className="eyebrow" style={{ marginBottom: 10 }}>EXPERIENCE</div>
         <div style={{ borderTop: '1px solid var(--line)' }}>
           {p.roles.length === 0 && <div className="small muted" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>We couldn't find any roles. Add them below.</div>}
           {p.roles.map((r, i) => (
-            <div key={i} className="row" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', alignItems: 'flex-start' }}>
-              <div style={{ minWidth: 0 }}><div style={{ fontSize: 14.5, fontWeight: 500 }}>{r.title}</div><div className="muted" style={{ fontSize: 13 }}>{r.org}</div></div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-                <div className="mono muted" style={{ fontSize: 11.5, whiteSpace: 'nowrap' }}>{r.dates}</div>
-                <button className="circle-btn" aria-label={`Remove ${r.title}`} onClick={() => edit({ roles: p.roles.filter((_, k) => k !== i) })}>✕</button>
+            <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="row" style={{ alignItems: 'flex-start' }}>
+                <div style={{ minWidth: 0 }}><div style={{ fontSize: 14.5, fontWeight: 500 }}>{r.title}</div><div className="muted" style={{ fontSize: 13 }}>{r.org}</div></div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                  <div className="mono muted" style={{ fontSize: 11.5, whiteSpace: 'nowrap' }}>{r.dates}</div>
+                  <button className="circle-btn" aria-label={`Remove ${r.title}`} onClick={() => edit({ roles: p.roles.filter((_, k) => k !== i) })}>✕</button>
+                </div>
               </div>
+              <Bullets
+                items={r.highlights ?? []}
+                onChange={(highlights) => edit({ roles: p.roles.map((x, k) => (k === i ? { ...x, highlights } : x)) })}
+              />
             </div>
           ))}
           <form

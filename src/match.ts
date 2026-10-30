@@ -79,3 +79,73 @@ export function searchesFor(p: Profile, s: Settings) {
     { keywords, location: 'Canada', remote: true },
   ]).slice(0, 4)
 }
+
+// ---------- Tailoring ----------
+
+export interface TailoredRole {
+  title: string
+  org: string
+  dates: string
+  /** Bullets to show, most relevant to the posting first. */
+  bullets: { text: string; relevant: boolean }[]
+  score: number
+}
+
+export interface Tailored {
+  matched: string[]
+  rest: string[]
+  summary: string
+  roles: TailoredRole[]
+  /** The single most relevant bullet, with its role, for the cover letter. */
+  best: { text: string; title: string; org: string }[]
+}
+
+const keywordsOf = (text: string) => new Set(words(text).filter((w) => w.length > 3))
+
+/**
+ * Picks and orders the user's own bullets for one posting. Nothing is reworded: bullets that share
+ * the posting's words (and skills it asks for) move to the front, and older or unrelated roles keep fewer.
+ */
+export function tailor(p: Profile, skills: string[], job: Pick<Job, 'title' | 'desc' | 'tags'>): Tailored {
+  const matched = skillsInJob(skills, job)
+  const jobWords = keywordsOf(`${job.title} ${job.title} ${job.tags.join(' ')} ${job.desc}`)
+  const titleWords = keywordsOf(job.title)
+  const scoreBullet = (b: string) => {
+    const bw = keywordsOf(b)
+    const shared = [...bw].filter((w) => jobWords.has(w)).length
+    const skillHits = matched.filter((k) => b.toLowerCase().includes(k.toLowerCase())).length
+    return shared + 2 * skillHits
+  }
+
+  const scored = p.roles.map((r) => {
+    const bullets = (r.highlights ?? []).map((text, i) => ({ text, i, score: scoreBullet(text) }))
+    const titleFit = [...keywordsOf(r.title)].filter((w) => titleWords.has(w)).length
+    return { r, bullets, score: Math.max(0, ...bullets.map((b) => b.score)) + 3 * titleFit }
+  })
+  const ranking = [...scored].sort((a, b) => b.score - a.score)
+  const roles: TailoredRole[] = scored.map(({ r, bullets, score }, idx) => {
+    const rank = ranking.findIndex((x) => x.r === r)
+    // The two most relevant roles show up to 3 bullets, others 2; an older, unrelated role keeps 1.
+    const keep = rank < 2 ? 3 : score === 0 && idx >= 2 ? 1 : 2
+    const top = [...bullets].sort((a, b) => b.score - a.score || a.i - b.i).slice(0, keep)
+    const threshold = Math.max(2, ...bullets.map((b) => b.score)) / 2
+    return { title: r.title, org: r.org, dates: r.dates, score, bullets: top.map((b) => ({ text: b.text, relevant: b.score >= threshold && b.score >= 2 })) }
+  })
+
+  const summary = (p.summary ?? '').split(/(?<=[.!?])\s+/).slice(0, 2).join(' ')
+  // Two different points for the cover letter: skip one that mostly repeats the first
+  // (LinkedIn and a portfolio often describe the same work twice).
+  const overlap = (a: string, b: string) => {
+    const wa = keywordsOf(a), wb = keywordsOf(b)
+    return [...wa].filter((w) => wb.has(w)).length / Math.max(1, Math.min(wa.size, wb.size))
+  }
+  const best: Tailored['best'] = []
+  for (const b of scored
+    .flatMap(({ r, bullets }) => bullets.map((x) => ({ text: x.text, title: r.title, org: r.org, score: x.score })))
+    .sort((a, b) => b.score - a.score)) {
+    if (best.length === 2 || b.score === 0) break
+    if (best.every((x) => overlap(x.text, b.text) < 0.4)) best.push({ text: b.text, title: b.title, org: b.org })
+  }
+
+  return { matched, rest: skills.filter((k) => !matched.includes(k)), summary, roles, best }
+}

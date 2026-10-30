@@ -41,6 +41,22 @@ export async function readWebsites(urls: string[]): Promise<WebRead> {
 
 const GENERIC_ORG_WORDS = new Set(['agence', 'agency', 'company', 'group', 'studio', 'studios', 'limited', 'canada', 'services', 'solutions', 'the'])
 
+/** Add bullets that say something new; skip ones that mostly repeat an existing bullet's words. */
+function mergeBullets(base: string[], extra: string[]): string[] {
+  const bag = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9+]+/).filter((w) => w.length > 3))
+  const out = [...base]
+  for (const b of extra) {
+    const w = bag(b)
+    const repeats = out.some((o) => {
+      const ow = bag(o)
+      const shared = [...w].filter((x) => ow.has(x)).length
+      return shared / Math.min(w.size, ow.size || 1) > 0.6
+    })
+    if (!repeats) out.push(b)
+  }
+  return out.slice(0, 8)
+}
+
 /** Fill gaps in a profile with what another source found, without overwriting what's already there. */
 export function mergeProfiles(base: Profile, extra: Profile): Profile {
   // The same job is often worded differently on each source ("Christelle agency" vs "Agence Christelle"),
@@ -48,8 +64,16 @@ export function mergeProfiles(base: Profile, extra: Profile): Profile {
   const words = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC_ORG_WORDS.has(w))
   const sameRole = (a: Profile['roles'][number], b: Profile['roles'][number]) =>
     a.dates.slice(0, 4) === b.dates.slice(0, 4) && (words(a.org).some((w) => words(b.org).includes(w)) || (!a.org && !b.org && a.title.toLowerCase() === b.title.toLowerCase()))
-  const roles = [...base.roles, ...extra.roles.filter((r) => !base.roles.some((b) => sameRole(b, r)))]
-    .sort((a, b) => (b.dates.slice(0, 4) || '0').localeCompare(a.dates.slice(0, 4) || '0'))
+  // A matching role keeps the base's title and employer but gains the other source's bullets.
+  // When several base roles match (LinkedIn lists one internship as two jobs), use the one whose title fits best.
+  const titleFit = (a: Profile['roles'][number], b: Profile['roles'][number]) => words(a.title).filter((w) => words(b.title).includes(w)).length
+  const roles: Profile['roles'] = base.roles.map((r) => ({ ...r, highlights: [...(r.highlights ?? [])] }))
+  for (const r of extra.roles) {
+    const match = roles.filter((b) => sameRole(b, r)).sort((x, y) => titleFit(y, r) - titleFit(x, r))[0]
+    if (!match) roles.push({ ...r })
+    else match.highlights = mergeBullets(match.highlights ?? [], r.highlights ?? [])
+  }
+  roles.sort((a, b) => (b.dates.slice(0, 4) || '0').localeCompare(a.dates.slice(0, 4) || '0'))
   const skills = [...base.skills, ...extra.skills.filter((k) => !base.skills.some((b) => b.toLowerCase() === k.toLowerCase()))]
   return {
     ...base,
@@ -60,7 +84,8 @@ export function mergeProfiles(base: Profile, extra: Profile): Profile {
     phone: base.phone || extra.phone,
     linkedin: base.linkedin || extra.linkedin,
     website: base.website || extra.website,
-    roles: roles.slice(0, 15),
+    summary: base.summary || extra.summary,
+    roles: roles.slice(0, 15).map((r) => (r.highlights?.length ? r : { ...r, highlights: undefined })),
     skills: skills.slice(0, 50),
     years: Math.max(base.years, extra.years),
     level: base.years >= extra.years ? base.level : extra.level,

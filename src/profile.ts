@@ -4,6 +4,8 @@ export interface Role {
   title: string
   org: string
   dates: string
+  /** What they did there, word for word from the resume, portfolio or LinkedIn. */
+  highlights?: string[]
 }
 
 export interface Profile {
@@ -14,6 +16,8 @@ export interface Profile {
   phone: string
   linkedin: string
   website?: string
+  /** Their own summary: a resume Summary section, LinkedIn About, or a portfolio intro. */
+  summary?: string
   roles: Role[]
   skills: string[]
   years: number
@@ -157,6 +161,7 @@ export function parseResume(text: string): Profile {
   // Experience: anchor on date ranges (or a lone year inside an Experience section), then take the
   // title and employer from the same line, the lines after it, or the lines before it.
   const spans: [number, number][] = []
+  const anchors: { line: number; role: number | null }[] = []
   const usable = (t?: { line: string; section: string | null }) => !!t && t.section !== 'header' && !isBullet(t.line) && !RANGE_RE.test(t.line) && !SINGLE_YEAR_RE.test(t.line) && t.line.length < 90
   for (let i = 0; i < tagged.length; i++) {
     const { line, section } = tagged[i]
@@ -190,8 +195,37 @@ export function parseResume(text: string): Profile {
     if (at) { title = at[1]; org = at[2] }
     // "Agence Christelle · Remote · Gatineau, QC" → "Agence Christelle"
     org = org.split(/\s+·\s+/).find((x) => !WORK_WORDS.test(x) && !CITY_RE.test(x)) ?? ''
+    anchors.push({ line: i, role: title ? p.roles.length : null })
     if (title) p.roles.push({ title: title.slice(0, 80), org: org.slice(0, 80), dates: shortDates(m[1], m[2]) })
-  }  p.roles = p.roles.filter((r, i, a) => a.findIndex((x) => x.title === r.title && x.org === r.org && x.dates === r.dates) === i).slice(0, 12)
+  }
+
+  // What they did in each role: bullets and sentences between its dates and the next role or heading.
+  // PDFs wrap long bullets onto several lines, so a line that continues an unfinished sentence is joined to it.
+  anchors.forEach((a, k) => {
+    if (a.role === null) return
+    const end = anchors[k + 1]?.line ?? tagged.length
+    const items: string[] = []
+    for (let j = a.line + 1; j < end; j++) {
+      const { line, section } = tagged[j]
+      if (section === 'header' || section === 'education' || section === 'skills') break
+      const text = clean(line.replace(/^[•●▪◦\-*–·¶]\s*/, ''))
+      const last = items.length - 1
+      if (isBullet(line) || /^[¶•]/.test(line)) items.push(text)
+      else if (last >= 0 && !/[.!?]$/.test(items[last]) && /^[a-z(&,]/.test(text)) items[last] += ' ' + text
+      else if (text.length > 60 && /\s\w+\s/.test(text)) items.push(text)
+    }
+    const kept = items.filter((x) => x.length >= 25 && x.length <= 400 && !/[\u0000-\u001f\ufffd]/.test(x)).slice(0, 6)
+    if (kept.length) p.roles[a.role].highlights = kept
+  })
+
+  // Their own summary: a Summary/Profile section, or a first-person intro on a portfolio page.
+  // Only full sentences count: menus and taglines also sit under headings like "About".
+  const summaryLines = tagged.filter((t) => t.section === 'summary').map((t) => clean(t.line)).filter((l) => l.length > 40 && /[.!]/.test(l)).slice(0, 3)
+  const intro = tagged.slice(0, 80).map((t) => t.line).find((l) => /^(I['’]m|I am|Hi,? I['’]m)\b/i.test(l) && l.length > 50)
+  const summary = (intro ?? summaryLines.join(' ')).trim()
+  if (summary) p.summary = summary.slice(0, 700)
+
+  p.roles = p.roles.filter((r, i, a) => a.findIndex((x) => x.title === r.title && x.org === r.org && x.dates === r.dates) === i).slice(0, 12)
 
   // Years: union of all experience spans.
   spans.sort((a, b) => a[0] - b[0])

@@ -3,7 +3,7 @@ import { JOB_STATUS, ago, fmtDate } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
-import { skillsInJob } from '../match'
+import { tailor } from '../match'
 
 type Filter = 'All' | 'New' | 'Applied'
 
@@ -101,26 +101,41 @@ function useTailoring(job: JobLike) {
   const { s } = useApp()
   const p = useProfile()
   const skills = p.skills.filter((k) => !s.skillOff.includes(k))
-  const matched = skillsInJob(skills, job)
-  return { p, matched, rest: skills.filter((k) => !matched.includes(k)) }
+  return { p, ...tailor(p, skills, job) }
+}
+
+/** "Designed a poster…" → "I designed a poster…"; other openings are quoted as written. */
+function inFirstPerson(text: string, org: string, sameOrgAsBefore = false) {
+  const first = text.split(/\s/)[0]
+  const t = text.replace(/\.$/, '')
+  if (/^[A-Z][a-z]+ed$/.test(first) || /^(Led|Ran|Built|Wrote|Made|Grew|Won|Taught|Drew|Shot|Took|Gave|Kept|Set|Met|Sold|Brought|Taught)$/.test(first)) {
+    const lead = sameOrgAsBefore ? 'I also' : `At ${org || 'my last role'}, I`;
+    return `${lead} ${t.charAt(0).toLowerCase()}${t.slice(1)}.`
+  }
+  return `At ${org || 'my last role'}: ${t}.`
 }
 
 export function TailoredResume({ job }: { job: JobLike }) {
-  const { p, matched, rest } = useTailoring(job)
+  const { p, matched, rest, summary, roles } = useTailoring(job)
   return (
     <>
       <div className="serif" style={{ fontSize: 18 }}>{p.name || 'Your name'}</div>
-      <div className="muted" style={{ fontSize: '0.95em', marginBottom: 10 }}>{[p.title, p.city, p.email].filter(Boolean).join(' · ')}</div>
+      <div className="muted" style={{ fontSize: '0.95em', marginBottom: 10 }}>{[p.title, p.city, p.email, p.website?.replace(/^https?:\/\//, '')].filter(Boolean).join(' · ')}</div>
       <div className="sec">SUMMARY</div>
       <div className="mb">
-        {p.title || 'Professional'}{p.years > 0 && ` with ${p.years} years of experience`}.{' '}
-        {matched.length > 0 && <span className="hl">Brings {matched.slice(0, 4).join(', ')} to the {job.title} role.</span>}
+        {summary || <>{p.title || 'Professional'}{p.years > 0 && ` with ${p.years} years of experience`}.</>}{' '}
+        {matched.length > 0 && <span className="hl">Skills for this role: {matched.slice(0, 5).join(', ')}.</span>}
       </div>
       <div className="sec">EXPERIENCE</div>
       <div className="mb">
-        {p.roles.length === 0 && <div className="muted">No roles on your profile yet.</div>}
-        {p.roles.map((r, i) => (
-          <div key={i} style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
+        {roles.length === 0 && <div className="muted">No roles on your profile yet.</div>}
+        {roles.map((r, i) => (
+          <div key={i} style={{ marginBottom: 6 }}>
+            <div style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
+            {r.bullets.map((b) => (
+              <div key={b.text} style={{ paddingLeft: 10, textIndent: -10 }}>• {b.relevant ? <span className="hl">{b.text}</span> : b.text}</div>
+            ))}
+          </div>
         ))}
       </div>
       <div className="sec">SKILLS</div>
@@ -134,24 +149,25 @@ export function TailoredResume({ job }: { job: JobLike }) {
 }
 
 export function CoverLetter({ job, company }: { job: JobLike; company: string }) {
-  const { p, matched } = useTailoring(job)
+  const { p, matched, best } = useTailoring(job)
   const [r1, r2] = p.roles
   return (
     <>
       <div className="mb">Dear {company} hiring team,</div>
       <div style={{ marginBottom: 8 }}>
         I'm applying for the {job.title} role.{' '}
-        <span className="hl">
-          {matched.length > 0
-            ? `My background in ${matched.slice(0, 3).join(', ')} lines up closely with what you're looking for.`
-            : `My experience${p.title ? ` as a ${p.title}` : ''} lines up with what this role calls for.`}
-        </span>
+        {matched.length > 0
+          ? <span className="hl">{`My background in ${matched.slice(0, 3).join(', ')} lines up closely with what you're looking for.`}</span>
+          : `My experience${p.title ? ` as a ${p.title}` : ''} lines up with what this role calls for.`}
       </div>
-      {r1 && (
+      {best.length > 0 ? (
+        <div style={{ marginBottom: 8 }}>
+          {best.map((b, i) => <span key={i} className="hl">{inFirstPerson(b.text, b.org, i > 0 && best[i - 1].org === b.org)}{' '}</span>)}
+        </div>
+      ) : r1 && (
         <div style={{ marginBottom: 8 }}>
           Most recently I've worked as {r1.title}{r1.org && ` at ${r1.org}`}
-          {r2 ? `, and before that as ${r2.title}${r2.org ? ` at ${r2.org}` : ''}` : ''}
-          {p.years > 0 ? `, for ${p.years} years of experience in total.` : '.'}
+          {r2 ? `, and before that as ${r2.title}${r2.org ? ` at ${r2.org}` : ''}` : ''}.
         </div>
       )}
       <div style={{ marginBottom: 12 }}>I'd welcome the chance to talk about how I could contribute.</div>
@@ -159,7 +175,6 @@ export function CoverLetter({ job, company }: { job: JobLike; company: string })
     </>
   )
 }
-
 /** Plain-text versions of the tailored documents, for copying into an application form. */
 function docText(el: HTMLElement | null) {
   return el?.innerText.replace(/\n{3,}/g, '\n\n').trim() ?? ''
@@ -245,7 +260,7 @@ export function JobDetail({ id }: { id: string }) {
         <div className="row">
           <div className="xs muted" style={{ lineHeight: 1.45 }}>
             <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--acc-hl)', borderRadius: 2, marginRight: 6, verticalAlign: -1 }} />
-            Built from your profile. Nothing is invented.
+            Your own bullets, picked and ordered for this posting. Nothing is invented.
           </div>
           <button className="chip" style={{ flexShrink: 0 }} onClick={copy}>Copy text</button>
         </div>

@@ -41,12 +41,20 @@ function monthsOf(e: Json): [number, number] | null {
   return a !== null && b !== null && b >= a ? [a, b] : null
 }
 
+/** A job description as separate points: its bullets or lines, or its sentences when it's one paragraph. */
+function points(text: string): string[] {
+  const lines = text.split(/\n+|\s*[•●▪]\s+/).map((l) => l.replace(/^[-*–]\s+/, '').trim()).filter(Boolean)
+  const parts = lines.length > 1 ? lines : text.split(/(?<=[.!?])\s+(?=[A-Z])/)
+  return parts.map((p) => p.trim()).filter((p) => p.length >= 25).slice(0, 6)
+}
+
 function normalize(raw: Json) {
   const exps = (raw.experiences ?? raw.experience ?? raw.positions ?? []) as Json[]
   const roles = exps.map((e) => ({
     title: str(e.title ?? e.position),
     org: str(e.companyName ?? e.company ?? e.subtitle).split(' · ')[0],
     dates: dates(e),
+    highlights: points(str(e.description)),
   })).filter((r) => r.title)
 
   const spans = exps.map(monthsOf).filter((x): x is [number, number] => !!x).sort((a, b) => a[0] - b[0])
@@ -79,6 +87,7 @@ function normalize(raw: Json) {
     name,
     title: str(raw.headline ?? raw.jobTitle ?? raw.occupation).split(' | ')[0].slice(0, 80),
     city,
+    summary: about.replace(/\s+/g, ' ').slice(0, 700),
     email: str(raw.email) || str((raw.emails as Json[] | undefined)?.map((x) => (typeof x === 'string' ? x : (x as Json)?.email))[0]),
     phone: str(raw.mobileNumber ?? raw.phone),
     linkedin: str(raw.linkedinUrl ?? raw.url ?? raw.profileUrl),
