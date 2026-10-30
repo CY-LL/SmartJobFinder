@@ -51,6 +51,8 @@ export function Upload() {
   const [panel, setPanel] = useState<Panel>('none')
   const [url, setUrl] = useState('')
   const [site, setSite] = useState('')
+  const [linkSite, setLinkSite] = useState('')
+  const [addSite, setAddSite] = useState('')
   const [fallback, setFallback] = useState(false)
 
   const applyProfile = (profile: Profile, fileName: string) => {
@@ -66,7 +68,6 @@ export function Upload() {
     if (!/\.(pdf|docx)$/i.test(f.name)) return setError(/\.doc$/i.test(f.name) ? 'Older .doc files can’t be read. Save it as .docx or PDF first.' : 'Please choose a PDF or DOCX file.')
     if (f.size > 10 * 1024 * 1024) return setError('That file is over 10 MB.')
     try {
-
       setBusy(`Reading ${f.name}…`)
       const profile = parseResume(await extractText(f))
       if (!profile.name && !profile.roles.length && !profile.skills.length) {
@@ -100,8 +101,30 @@ export function Upload() {
     }
   }
 
-  const importLinkedIn = async () => {
+  // Add a portfolio or online resume to the profile already imported, filling in what it adds.
+  const addWebsite = async () => {
     setError('')
+    const u = addSite.trim()
+    if (!s.profile) return
+    if (!/^(https?:\/\/)?[\w-]+(\.[\w-]+)+/i.test(u)) return setError('Paste a link to the portfolio, personal site or online resume.')
+    setBusy(`Reading ${u.replace(/^https?:\/\/(www\.)?/, '')} and any resume it links to…`)
+    try {
+      const web = await readWebsites([u])
+      const before = s.profile
+      const merged = mergeProfiles(before, { ...web.profile, website: u })
+      const added = merged.roles.length - before.roles.length
+      const addedSkills = merged.skills.length - before.skills.length
+      set({ profile: merged, fileName: s.fileName.includes('+ website') ? s.fileName : `${s.fileName} + website`, ...prefsFrom(merged) })
+      setAddSite('')
+      setNote(`Read ${web.read.join(', ')}: added ${added} ${added === 1 ? 'role' : 'roles'} and ${addedSkills} ${addedSkills === 1 ? 'skill' : 'skills'}.${web.skipped.length ? ` Couldn’t open: ${web.skipped.join(', ')}.` : ''}`)
+    } catch (e) {
+      fail(e, 'Couldn’t read that website.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const importLinkedIn = async () => {    setError('')
     setNote('')
     setFallback(false)
     if (!/linkedin\.com\/in\/[\w%-]+/i.test(url)) return setError('Paste your profile link, e.g. linkedin.com/in/your-name.')
@@ -122,8 +145,10 @@ export function Upload() {
         return
       }
       const handle = decodeURIComponent(url.match(/linkedin\.com\/in\/([\w%-]+)/i)?.[1] ?? 'profile')
-      const { links = [], ...li } = data.profile as Profile & { links?: string[] }
+      const { links: found = [], ...li } = data.profile as Profile & { links?: string[] }
       let profile: Profile = { ...emptyProfile(), ...li, linkedin: li.linkedin || url.trim() }
+      const typed = linkSite.trim() ? [linkSite.trim()] : []
+      const links = [...typed, ...found.filter((l) => !typed.some((t) => l.includes(t.replace(/^https?:\/\//, ''))))]
 
       // Follow the portfolio / resume links on the profile and merge what they say.
       if (links.length) {
@@ -134,8 +159,10 @@ export function Upload() {
           const missed = merged.skipped.length ? ` Couldn’t open: ${merged.skipped.join(', ')}.` : ''
           setNote(`Combined LinkedIn with ${merged.read.join(', ')}.${missed}`)
         } catch (e) {
-          setNote(`Imported LinkedIn only. ${e instanceof Error ? e.message : ''} Links on the profile: ${links.join(', ')}`)
+          setNote(`Imported LinkedIn only. ${e instanceof Error ? e.message : ''} Links: ${links.join(', ')}`)
         }
+      } else {
+        setNote('LinkedIn only shows the website in Contact info to signed-in members, so it wasn’t included. Add the portfolio below to read it too.')
       }
 
       applyProfile(profile, `LinkedIn · ${handle}`)
@@ -200,8 +227,9 @@ export function Upload() {
                 <input className="text-input" style={fieldStyle} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="linkedin.com/in/your-name" aria-label="LinkedIn profile URL" inputMode="url" autoFocus />
                 <button className="btn" type="submit" style={smallBtn}>Import</button>
               </form>
+              <input className="text-input" style={fieldStyle} value={linkSite} onChange={(e) => setLinkSite(e.target.value)} placeholder="Portfolio or website (optional)" aria-label="Portfolio or website" inputMode="url" />
               <div className="xs muted" style={{ lineHeight: 1.45 }}>
-                We read your public profile once, plus any portfolio or resume it links to. Import your own profile only.
+                We read your public profile once. LinkedIn hides the website in Contact info from public view, so paste your portfolio too and we’ll combine them. Import your own profile only.
               </div>
               {(fallback || !error) && (
                 <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -247,6 +275,10 @@ export function Upload() {
             </div>
           </div>
           {note && <div className="xs muted" style={{ lineHeight: 1.45, overflowWrap: 'anywhere' }}>{note}</div>}
+          <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); addWebsite() }}>
+            <input className="text-input" style={fieldStyle} value={addSite} onChange={(e) => setAddSite(e.target.value)} placeholder="Add a portfolio or website" aria-label="Add a portfolio or website" inputMode="url" />
+            <button className="btn soft" type="submit" style={{ width: 'auto', padding: '10px 14px' }}>Add</button>
+          </form>
           <button className="btn" onClick={() => go('review')}>Review what we found</button>
         </>
       )}

@@ -39,10 +39,17 @@ export async function readWebsites(urls: string[]): Promise<WebRead> {
   return { profile, read: data.read ?? [], skipped: data.skipped ?? [] }
 }
 
+const GENERIC_ORG_WORDS = new Set(['agence', 'agency', 'company', 'group', 'studio', 'studios', 'limited', 'canada', 'services', 'solutions', 'the'])
+
 /** Fill gaps in a profile with what another source found, without overwriting what's already there. */
 export function mergeProfiles(base: Profile, extra: Profile): Profile {
-  const key = (r: Profile['roles'][number]) => `${r.title}|${r.org}`.toLowerCase().replace(/[^a-z0-9|]/g, '')
-  const roles = [...base.roles, ...extra.roles.filter((r) => !base.roles.some((b) => key(b) === key(r)))]
+  // The same job is often worded differently on each source ("Christelle agency" vs "Agence Christelle"),
+  // so treat roles as one when they start the same year at an employer sharing a distinctive word.
+  const words = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC_ORG_WORDS.has(w))
+  const sameRole = (a: Profile['roles'][number], b: Profile['roles'][number]) =>
+    a.dates.slice(0, 4) === b.dates.slice(0, 4) && (words(a.org).some((w) => words(b.org).includes(w)) || (!a.org && !b.org && a.title.toLowerCase() === b.title.toLowerCase()))
+  const roles = [...base.roles, ...extra.roles.filter((r) => !base.roles.some((b) => sameRole(b, r)))]
+    .sort((a, b) => (b.dates.slice(0, 4) || '0').localeCompare(a.dates.slice(0, 4) || '0'))
   const skills = [...base.skills, ...extra.skills.filter((k) => !base.skills.some((b) => b.toLowerCase() === k.toLowerCase()))]
   return {
     ...base,

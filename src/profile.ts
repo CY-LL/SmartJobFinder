@@ -39,7 +39,7 @@ const LINKEDIN_RE = /(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/in\/[\w%-]+
 const PROVINCES = 'AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC'
 const CITY_RE = new RegExp(`\\b([A-Z][A-Za-zÀ-ÿ.'-]+(?:[ -][A-Z][A-Za-zÀ-ÿ.'-]+){0,2}),\\s*(${PROVINCES}|Ontario|Quebec|Québec|British Columbia|Alberta|Manitoba|Saskatchewan|Nova Scotia|New Brunswick|Newfoundland and Labrador|Prince Edward Island|Canada|United States|USA|United Kingdom|UK)\\b`)
 
-const TITLE_WORDS = /\b(designer|engineer|developer|manager|director|lead|head|analyst|specialist|consultant|intern|co-?op|coordinator|officer|assistant|associate|architect|scientist|administrator|advisor|adviser|strategist|researcher|writer|editor|accountant|technician|representative|supervisor|president|founder|owner|partner|teacher|instructor|nurse|programmer|planner|producer|vp|cto|ceo|cfo|principal|staff|senior|junior|sr\.?|jr\.?)\b/i
+const TITLE_WORDS = /\b(designer|engineer|developer|manager|director|lead|head|analyst|specialist|consultant|intern|co-?op|coordinator|officer|assistant|associate|architect|scientist|administrator|advisor|adviser|strategist|researcher|writer|editor|accountant|technician|representative|supervisor|president|founder|owner|partner|teacher|instructor|nurse|programmer|planner|producer|vp|cto|ceo|cfo|principal|staff|senior|junior|sr\.?|jr\.?|tutor|receptionist|cashier|clerk|barista|server|illustrator|photographer|videographer|animator|artist|translator|mentor|trainer|ambassador|agent|operator|bookkeeper|copywriter|marketer|nurse|chef|cook)\b/i
 
 const SECTIONS: [RegExp, string][] = [
   [/^(work |professional |relevant )?(experience|employment( history)?|work history|career history)$/i, 'experience'],
@@ -79,7 +79,22 @@ function shortDates(from: string, to: string): string {
   return y1.slice(0, 2) === y2.slice(0, 2) && y1 !== y2 ? `${y1}–${y2.slice(2)}` : y1 === y2 ? y1 : `${y1}–${y2}`
 }
 
+/** Common tools and skills, used when a resume or portfolio has no skills section of its own. */
+const KNOWN_SKILLS = [
+  'Adobe Illustrator', 'Photoshop', 'InDesign', 'After Effects', 'Premiere Pro', 'Lightroom', 'Adobe XD', 'Figma', 'Sketch', 'Canva', 'Cinema 4D', 'Blender',
+  'Branding', 'Typography', 'Visual identity', 'Packaging design', 'Editorial design', 'Motion graphics', 'Illustration', 'Photography', 'Video editing',
+  'UI design', 'UX design', 'UI/UX', 'Wireframing', 'Prototyping', 'User research', 'Usability testing', 'Design systems', 'Accessibility', 'WCAG',
+  'Social media', 'Content creation', 'Copywriting', 'Editing', 'Proofreading', 'SEO', 'Email marketing', 'Google Analytics',
+  'HTML', 'CSS', 'JavaScript', 'TypeScript', 'React', 'Vue', 'Angular', 'Node.js', 'Python', 'Java', 'C#', 'C++', 'SQL', 'PostgreSQL', 'MongoDB',
+  'AWS', 'Azure', 'Docker', 'Kubernetes', 'Git', 'GitHub', 'WordPress', 'Shopify', 'Webflow',
+  'Excel', 'PowerPoint', 'Microsoft Word', 'Google Workspace', 'Asana', 'Trello', 'Jira', 'Notion', 'Slack',
+  'Project management', 'Agile', 'Scrum', 'Customer service', 'Bilingual', 'French', 'English', 'Spanish',
+]
 const isBullet = (l: string) => /^[•●▪◦\-*–·]\s/.test(l)
+const SINGLE_YEAR_RE = new RegExp(`^(${DATE})$`, 'i')
+const WORK_WORDS = /^(remote|hybrid|on-?site|volunteer|full-time|part-time|contract|freelance|internship|co-?op|self-employed)$/i
+// Site titles like "Chloé Landry Design" or "Jane Doe — Portfolio" carry the person's name.
+const NAME_SUFFIX = /\s*(?:[-–—|·]\s*)?\b(design|designs|portfolio|studio|creative|resume|résumé|cv|website|photography)$/i
 const isNameLike = (l: string) => /^[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.-]+(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.-]+){1,3}$/.test(l) && l.length <= 40
 const clean = (l: string) => l.replace(/\s+/g, ' ').replace(/^[|•·,\s-]+|[|•·,\s-]+$/g, '').trim()
 
@@ -114,7 +129,8 @@ export function parseResume(text: string): Profile {
   // Name: score name-like lines near the top.
   let best = -Infinity, nameIdx = -1
   for (let i = 0; i < Math.min(tagged.length, 40); i++) {
-    const { line, section } = tagged[i]
+    const { section } = tagged[i]
+    const line = tagged[i].line.replace(NAME_SUFFIX, '')
     if (!isNameLike(line) || sectionOf(line)) continue
     let score = 0
     if (i < 3) score += 3
@@ -124,7 +140,7 @@ export function parseResume(text: string): Profile {
     if (/\b(university|college|school|concentration|minor|major|bachelor|master|degree|diploma|certificate|interaction|design|engineering|science)\b/i.test(line)) score -= 4
     if (score > best) { best = score; nameIdx = i }
   }
-  if (nameIdx >= 0) p.name = tagged[nameIdx].line
+  if (nameIdx >= 0) p.name = tagged[nameIdx].line.replace(NAME_SUFFIX, '')
 
   // Headline: the line after the name, if it isn't contact info or the location.
   if (nameIdx >= 0) {
@@ -133,16 +149,20 @@ export function parseResume(text: string): Profile {
       if (tagged[i].section === 'header' || EMAIL_RE.test(l) || PHONE_RE.test(l) || LINKEDIN_RE.test(l)) continue
       if (l.includes(p.name) || /\b(skip to|menu|navigation|home|cookie)\b/i.test(l)) continue
       if (i === locIdx) continue
-      if (l.length <= 120) { p.title = clean(l.split(/\s[|•]\s/)[0]).slice(0, 80); break }
+      // Only accept a line that reads like a job title (skips menus and taglines); otherwise the latest role is used below.
+      if (l.length <= 100 && TITLE_WORDS.test(l)) { p.title = clean(l.split(/\s[|•]\s/)[0]).slice(0, 80); break }
     }
   }
 
-  // Experience: anchor on date ranges, take title/org from the same or preceding lines.
+  // Experience: anchor on date ranges (or a lone year inside an Experience section), then take the
+  // title and employer from the same line, the lines after it, or the lines before it.
   const spans: [number, number][] = []
+  const usable = (t?: { line: string; section: string | null }) => !!t && t.section !== 'header' && !isBullet(t.line) && !RANGE_RE.test(t.line) && !SINGLE_YEAR_RE.test(t.line) && t.line.length < 90
   for (let i = 0; i < tagged.length; i++) {
     const { line, section } = tagged[i]
     if (section === 'education' || section === 'header') continue
-    const m = line.match(RANGE_RE)
+    const single = section === 'experience' ? line.match(SINGLE_YEAR_RE) : null
+    const m = line.match(RANGE_RE) ?? (single ? [single[0], single[1], single[1]] : null)
     if (!m) continue
     if (section !== 'experience' && !TITLE_WORDS.test(line) && !TITLE_WORDS.test(tagged[i - 1]?.line ?? '') && !TITLE_WORDS.test(tagged[i - 2]?.line ?? '')) continue
     const from = parseDate(m[1], false), to = parseDate(m[2], true)
@@ -156,17 +176,22 @@ export function parseResume(text: string): Profile {
       title = parts[ti >= 0 ? ti : 0]
       org = parts.find((_, k) => k !== (ti >= 0 ? ti : 0)) ?? ''
     } else {
-      const prev = [tagged[i - 1], tagged[i - 2]].filter((t) => t && t.section !== 'header' && !isBullet(t.line) && !RANGE_RE.test(t.line)).map((t) => clean(t.line))
-      const cand = [...(parts[0] ? [parts[0]] : []), ...prev].filter((x) => x.length < 90)
+      // Portfolio sites often put the date first, then the title and employer below it;
+      // resumes and LinkedIn PDFs put them above. Use whichever side holds a job title.
+      const after = [tagged[i + 1], tagged[i + 2]].filter(usable).map((t) => clean(t!.line))
+      const before = [tagged[i - 1], tagged[i - 2]].filter(usable).map((t) => clean(t!.line))
+      const useAfter = !parts[0] && after[0] !== undefined && TITLE_WORDS.test(after[0]) && !(before[0] && TITLE_WORDS.test(before[0]))
+      const cand = [...(parts[0] ? [parts[0]] : []), ...(useAfter ? after : before)]
       const ti = cand.findIndex((x) => TITLE_WORDS.test(x))
       title = cand[ti >= 0 ? ti : 0] ?? ''
-      org = cand.find((x, k) => k !== (ti >= 0 ? ti : 0) && !CITY_RE.test(x)) ?? ''
+      org = cand.find((x, k) => k !== (ti >= 0 ? ti : 0) && !CITY_RE.test(x.split(' · ')[0])) ?? ''
     }
     const at = !org && title.match(/^(.+?)\s+(?:at|@|—|–|\||·)\s+(.+)$/)
     if (at) { title = at[1]; org = at[2] }
+    // "Agence Christelle · Remote · Gatineau, QC" → "Agence Christelle"
+    org = org.split(/\s+·\s+/).find((x) => !WORK_WORDS.test(x) && !CITY_RE.test(x)) ?? ''
     if (title) p.roles.push({ title: title.slice(0, 80), org: org.slice(0, 80), dates: shortDates(m[1], m[2]) })
-  }
-  p.roles = p.roles.filter((r, i, a) => a.findIndex((x) => x.title === r.title && x.org === r.org && x.dates === r.dates) === i).slice(0, 12)
+  }  p.roles = p.roles.filter((r, i, a) => a.findIndex((x) => x.title === r.title && x.org === r.org && x.dates === r.dates) === i).slice(0, 12)
 
   // Years: union of all experience spans.
   spans.sort((a, b) => a[0] - b[0])
@@ -190,6 +215,8 @@ export function parseResume(text: string): Profile {
   }
   // Drop glyphs a PDF font couldn't map, and names of people or employers that slipped into the list.
   const notSkills = new Set([p.name, ...p.roles.map((r) => r.org)].map((x) => x.toLowerCase()).filter(Boolean))
+  // No skills heading (common on portfolio sites): pick out well-known tools and skills mentioned in the text.
+  if (skills.length < 5) skills.push(...KNOWN_SKILLS.filter((k) => new RegExp(`(^|[^\\w])${k.replace(/[.+#]/g, '\\$&')}($|[^\\w])`, 'i').test(text)))
   p.skills = [...new Map(skills.filter((k) => !/[\u0000-\u001f\ufffd]/.test(k) && !notSkills.has(k.toLowerCase())).map((k) => [k.toLowerCase(), k])).values()].slice(0, 40)
   if (!p.title && p.roles[0]) p.title = p.roles[0].title
   return p
