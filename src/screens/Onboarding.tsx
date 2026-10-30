@@ -3,6 +3,7 @@ import { CITIES, JOB_TYPES, LEVELS, PROVINCES } from '../data'
 import { fmtSalary, toggleIn } from '../store'
 import type { Settings } from '../store'
 import { emptyProfile, levelFor, parseResume } from '../profile'
+import { suggestedTitles } from '../match'
 import type { Education, Profile, Role } from '../profile'
 import { extractText } from '../extract'
 import { mergeProfiles, readWebsites } from '../web'
@@ -454,6 +455,39 @@ export function Review() {
   )
 }
 
+/** The job titles searched on every site: suggested from the profile until the user edits the list. */
+function TitlesPicker() {
+  const { s, set } = useApp()
+  const p = useProfile()
+  const [draft, setDraft] = useState('')
+  const custom = s.searchTitles.length > 0
+  const titles = custom ? s.searchTitles : suggestedTitles(p)
+  const save = (next: string[]) => set({ searchTitles: next })
+  const add = () => {
+    const v = draft.trim()
+    if (v && titles.length < 3 && !titles.some((t) => t.toLowerCase() === v.toLowerCase())) save([...titles, v])
+    setDraft('')
+  }
+  return (
+    <div className="stack">
+      <SectionHead title="Job titles to search" hint={custom ? <button className="link" style={{ fontSize: 12 }} onClick={() => save([])}>Use suggestions</button> : 'Suggested from your profile'} />
+      <div className="card" style={{ borderRadius: 14, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="wrap" style={{ gap: 6 }}>
+          {titles.map((t) => (
+            <div key={t} className="city-chip">{t}<button aria-label={`Remove ${t}`} onClick={() => save(titles.filter((x) => x !== t))}>✕</button></div>
+          ))}
+        </div>
+        {titles.length < 3 && (
+          <form onSubmit={(e) => { e.preventDefault(); add() }}>
+            <input className="text-input" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} placeholder="Add a title, e.g. UI Designer" aria-label="Add a job title" />
+          </form>
+        )}
+      </div>
+      <div className="xs muted" style={{ lineHeight: 1.45 }}>Up to 3. Each title is searched near your city and remote, on every site you have on (about $0.20 per title per search).</div>
+    </div>
+  )
+}
+
 export function Prefs() {
   const { s, set } = useApp()
   const [q, setQ] = useState('')
@@ -468,6 +502,8 @@ export function Prefs() {
   return (
     <div className="screen" style={{ gap: 24 }}>
       <div className="h1">Where and what you'll take.</div>
+
+      <TitlesPicker />
 
       <div className="stack">
         <SectionHead title="On-site" hint="Cities you'd commute to" />

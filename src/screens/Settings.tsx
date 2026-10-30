@@ -1,6 +1,7 @@
 import { SOURCES, fmtDate } from '../data'
 import type { Application } from '../data'
 import { fmtSalary } from '../store'
+import { suggestedTitles } from '../match'
 import { Toggle, useApp } from '../ui'
 
 function exportCsv(rows: Application[]) {
@@ -21,6 +22,7 @@ export function Settings() {
   const rows: [string, string, string][] = [
     ['Resume', s.fileName || 'Not added', 'upload'],
     ['Profile', s.profile ? [s.profile.name, s.profile.title].filter(Boolean).join(' · ') : 'Not set up', 'review'],
+    ['Job titles', (s.searchTitles.length ? s.searchTitles : s.profile ? suggestedTitles(s.profile) : []).join(', ') || 'From your profile', 'prefs'],
     ['On-site', s.cities.join(', ') || 'Anywhere', 'prefs'],
     ['Remote', s.scope === 'all' ? 'Anywhere in Canada' : s.provinces.join(', ') || 'None', 'prefs'],
     ['Job type', s.types.join(', ') || 'None', 'prefs'],

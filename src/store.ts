@@ -8,6 +8,8 @@ export interface Settings {
   fileName: string
   profile: Profile | null
   skillOff: string[]
+  /** Job titles to search for; empty means suggested from the profile. */
+  searchTitles: string[]
   cities: string[]
   scope: 'all' | 'some'
   provinces: string[]
@@ -37,6 +39,7 @@ export const DEFAULTS: Settings = {
   fileName: '',
   profile: null,
   skillOff: [],
+  searchTitles: [],
   cities: [],
   scope: 'all',
   provinces: ['ON', 'QC'],

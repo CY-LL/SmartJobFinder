@@ -67,17 +67,40 @@ export function filteredOut(job: Job, s: Settings): string | null {
   return null
 }
 
-/** The searches to run for a profile: its main title(s), near each on-site city and remote. */
-export function searchesFor(p: Profile, s: Settings) {
-  const titles = [p.title.split(/\s*[,|@•·]\s*|\s+at\s+|\s+-\s+/i)[0], p.roles[0]?.title ?? '']
-    .map((t) => t.replace(/\(.*?\)/g, '').trim().slice(0, 60))
-    .filter((t, i, a) => t && a.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i)
+/** "Graphic Design Intern" → "Graphic Designer": drop internship / student wording so searches find real jobs. */
+export function cleanTitle(raw: string): string {
+  const t = raw.split(/\s*[,|@•·]\s*|\s+at\s+|\s+-\s+/i)[0]
+    .replace(/\(.*?\)/g, '')
+    .replace(/\b(intern(ship)?|co-?op|student|trainee|apprentice|volunteer|part[- ]time|summer|placement)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  // What's left of "Graphic Design Intern" is the field, not a job title.
+  return (/\bdesign$/i.test(t) ? `${t}er` : t).slice(0, 60)
+}
+
+/**
+ * The job titles to search for when the user hasn't picked their own: their headline, then for early-career
+ * profiles the junior version of it ("Junior Designer"), then their latest role. Older roles in other
+ * fields (tutor, receptionist) aren't searched.
+ */
+export function suggestedTitles(p: Profile): string[] {
+  const main = cleanTitle(p.title) || cleanTitle(p.roles[0]?.title ?? '')
+  const junior = main && (p.level === 'Junior' || p.years < 3) && !/^junior\b/i.test(main) ? `Junior ${main.split(' ').pop()}` : ''
+  const latest = cleanTitle(p.roles[0]?.title ?? '')
+  return [main, junior, latest]
+    .filter((t) => t && t.split(' ').length <= 5)
+    .filter((t, i, a) => a.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i)
     .slice(0, 2)
+}
+
+/** The searches to run: each job title near the user's first city, and remote in Canada. */
+export function searchesFor(p: Profile, s: Settings) {
+  const titles = (s.searchTitles?.length ? s.searchTitles : suggestedTitles(p)).slice(0, 3)
   const city = s.cities[0] ?? p.city ?? ''
   return titles.flatMap((keywords) => [
     ...(city ? [{ keywords, location: city, remote: false }] : []),
     { keywords, location: 'Canada', remote: true },
-  ]).slice(0, 4)
+  ])
 }
 
 // ---------- Tailoring ----------

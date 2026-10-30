@@ -380,7 +380,7 @@ export default async (req: Request) => {
   } catch {
     return json({ error: 'bad_request', message: 'Send JSON with "searches" and "sources".' }, 400)
   }
-  const searches = (body.searches ?? []).filter((s) => str(s.keywords)).slice(0, 4)
+  const searches = (body.searches ?? []).filter((s) => str(s.keywords)).slice(0, 6)
   const sources = (body.sources ?? []).filter((s): s is Source => s in SOURCES)
   if (!searches.length) return json({ error: 'bad_request', message: 'Add a job title to your profile so we know what to search for.' }, 400)
   if (!sources.length) return json({ error: 'no_sources', message: 'Turn on at least one source in Settings → Job sources.' }, 400)
