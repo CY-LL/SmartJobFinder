@@ -1,6 +1,7 @@
 // Fetches resumes and portfolio pages from the web, following links to a resume or CV.
+// The app reads what comes back with its built-in resume reader.
 
-import type { Source } from './claude.mts'
+export type Source = { kind: 'pdf'; name: string; base64: string } | { kind: 'text'; name: string; text: string }
 
 const MAX_BYTES = 4 * 1024 * 1024
 const MAX_TEXT = 60_000
@@ -85,7 +86,7 @@ async function get(url: string): Promise<{ type: string; body: ArrayBuffer; fina
 
 const isPdf = (type: string, body: ArrayBuffer) => type.includes('pdf') || new TextDecoder().decode(body.slice(0, 5)) === '%PDF-'
 
-/** Fetch a URL (and up to two resume/about links it points to) as sources for Claude. */
+/** Fetch a URL (and up to two resume/about links it points to). */
 export async function fetchSources(url: string, depth = 1): Promise<{ sources: Source[]; read: string[] }> {
   const page = await get(url)
   if (!page) return { sources: [], read: [] }

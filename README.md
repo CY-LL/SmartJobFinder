@@ -13,15 +13,14 @@ A responsive web app (React + TypeScript + Vite) built from the Claude Design pr
 
 ## Resume and LinkedIn import
 
-- **Claude reader (default)** — `POST /api/parse` ([`netlify/functions/parse.mts`](netlify/functions/parse.mts)) sends an uploaded resume (PDF as a document, DOCX as text), one or more web pages, or both to Claude Opus 5.5 and gets back a structured profile ([`netlify/lib/claude.mts`](netlify/lib/claude.mts)). Requires `ANTHROPIC_API_KEY`. Uses Anthropic's server-side refusal fallback (`fallbacks: "default"`).
-- **Website** — paste a portfolio, personal site, PDF link, or shared Google Doc / Drive / Dropbox file. The fetcher ([`netlify/lib/fetchdoc.mts`](netlify/lib/fetchdoc.mts)) also follows up to two "resume"/"CV" links on the page.
-- **Basic reader** — PDF and DOCX resumes read in the browser ([`src/extract.ts`](src/extract.ts)) with pattern rules ([`src/profile.ts`](src/profile.ts)). Used when the user picks it in Settings, or automatically when Claude isn't available. The user corrects anything on the review screen.
-- **LinkedIn URL** — `POST /api/linkedin` ([`netlify/functions/linkedin.mts`](netlify/functions/linkedin.mts)) runs an Apify LinkedIn profile scraper. Set these in Netlify → Project configuration → Environment variables:
-  - `APIFY_TOKEN` (required) — your Apify API token
-  - `APIFY_LINKEDIN_ACTOR` (optional) — defaults to `dev_fusion~Linkedin-Profile-Scraper`
-- **LinkedIn links** — with the Claude reader on, the portfolio, resume and website links on the LinkedIn profile are read too and merged with the LinkedIn data.
-- **LinkedIn PDF fallback** — when the lookup isn't configured or fails, the app walks the user through LinkedIn's *Save to PDF* and parses that file instead.
+All reading is done in the browser with pattern rules ([`src/profile.ts`](src/profile.ts)); no AI service is used. The user corrects anything on the review screen.
 
+- **Upload** — PDF and DOCX resumes, turned into text in the browser ([`src/extract.ts`](src/extract.ts)).
+- **Website** — paste a portfolio, personal site, PDF link, or shared Google Doc / Drive / Dropbox file. `POST /api/fetch` ([`netlify/functions/fetch.mts`](netlify/functions/fetch.mts)) downloads it, plus up to two "resume"/"CV" links on the page ([`netlify/lib/fetchdoc.mts`](netlify/lib/fetchdoc.mts)), because browsers can't fetch other sites directly. Each page and file is parsed separately and combined ([`src/web.ts`](src/web.ts)).
+- **LinkedIn URL** — `POST /api/linkedin` ([`netlify/functions/linkedin.mts`](netlify/functions/linkedin.mts)) runs an Apify LinkedIn profile scraper (`harvestapi~linkedin-profile-scraper`). The website, portfolio and resume links on the profile are then fetched and merged in the same way. Set these in Netlify → Project configuration → Environment variables:
+  - `APIFY_TOKEN` (required) — your Apify API token
+  - `APIFY_LINKEDIN_ACTOR` (optional) — a different profile scraper
+- **LinkedIn PDF fallback** — when the lookup isn't configured or fails, the app walks the user through LinkedIn's *Save to PDF* and parses that file instead.
 ## Job search
 
 `/api/jobs` ([`netlify/functions/jobs.mts`](netlify/functions/jobs.mts)) searches **Indeed** (`valig~indeed-jobs-scraper`) and **LinkedIn** (`curious_coder~linkedin-jobs-scraper`) on Apify, using the profile's title near the user's city and remote in Canada. Runs start in the background and the browser polls until they finish. Results are de-duplicated across sites, then scored and filtered in the browser ([`src/match.ts`](src/match.ts)) by title fit, skills found in the posting, level, years of experience, job type, salary and location.

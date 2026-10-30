@@ -4,8 +4,6 @@ export interface Role {
   title: string
   org: string
   dates: string
-  /** Achievements stated on the resume, when the reader found them. */
-  highlights?: string[]
 }
 
 export interface Profile {
@@ -16,10 +14,6 @@ export interface Profile {
   phone: string
   linkedin: string
   website?: string
-  summary?: string
-  education?: string[]
-  /** Who read it: Claude, or the built-in pattern rules. */
-  readBy?: 'claude' | 'rules'
   roles: Role[]
   skills: string[]
   years: number
@@ -127,6 +121,7 @@ export function parseResume(text: string): Profile {
     if (locIdx > i && locIdx - i <= 3) score += 3
     if (section === 'skills' || section === 'other' || section === 'experience' || section === 'education') score -= 4
     if (TITLE_WORDS.test(line)) score -= 3
+    if (/\b(university|college|school|concentration|minor|major|bachelor|master|degree|diploma|certificate|interaction|design|engineering|science)\b/i.test(line)) score -= 4
     if (score > best) { best = score; nameIdx = i }
   }
   if (nameIdx >= 0) p.name = tagged[nameIdx].line
@@ -136,6 +131,7 @@ export function parseResume(text: string): Profile {
     for (let i = nameIdx + 1; i < Math.min(tagged.length, nameIdx + 4); i++) {
       const l = tagged[i].line
       if (tagged[i].section === 'header' || EMAIL_RE.test(l) || PHONE_RE.test(l) || LINKEDIN_RE.test(l)) continue
+      if (l.includes(p.name) || /\b(skip to|menu|navigation|home|cookie)\b/i.test(l)) continue
       if (i === locIdx) continue
       if (l.length <= 120) { p.title = clean(l.split(/\s[|•]\s/)[0]).slice(0, 80); break }
     }
@@ -154,7 +150,7 @@ export function parseResume(text: string): Profile {
 
     const rest = clean(line.replace(m[0], '').replace(/\(.*?\)/g, ''))
     let title = '', org = ''
-    const parts = rest.split(/\s+(?:—|–|-|\||@|at)\s+|,\s+/).map(clean).filter(Boolean)
+    const parts = rest.split(/\s+(?:—|–|-|\||@|·|at)\s+|,\s+/).map(clean).filter(Boolean)
     if (parts.length >= 2) {
       const ti = parts.findIndex((x) => TITLE_WORDS.test(x))
       title = parts[ti >= 0 ? ti : 0]
@@ -166,7 +162,7 @@ export function parseResume(text: string): Profile {
       title = cand[ti >= 0 ? ti : 0] ?? ''
       org = cand.find((x, k) => k !== (ti >= 0 ? ti : 0) && !CITY_RE.test(x)) ?? ''
     }
-    const at = !org && title.match(/^(.+?)\s+(?:at|@|—|–|\|)\s+(.+)$/)
+    const at = !org && title.match(/^(.+?)\s+(?:at|@|—|–|\||·)\s+(.+)$/)
     if (at) { title = at[1]; org = at[2] }
     if (title) p.roles.push({ title: title.slice(0, 80), org: org.slice(0, 80), dates: shortDates(m[1], m[2]) })
   }
@@ -185,13 +181,16 @@ export function parseResume(text: string): Profile {
   // Skills: items from skills sections.
   const skills: string[] = []
   for (const { line, section } of tagged) {
-    if (section !== 'skills' || /^languages?\s*:/i.test(line)) continue
+    // Skip prose: bullets and long sentences under a skills heading are achievements, not skill lists.
+    if (section !== 'skills' || /^languages?\s*:/i.test(line) || isBullet(line) || /^[¶•]/.test(line) || line.split(' ').length > 14) continue
     for (const raw of line.replace(/^[^:]{2,30}:\s*/, '').split(/[,;|•●▪·]|\s{2,}|\s-\s/)) {
-      const k = clean(raw)
-      if (k.length >= 2 && k.length <= 40 && k.split(' ').length <= 5 && !/\.$/.test(k)) skills.push(k)
+      const k = clean(raw).replace(/^(and|or|&)\s+/i, '')
+      if (k.length >= 2 && k.length <= 40 && k.split(' ').length <= 4 && !/\.$/.test(k) && !/[¶°]/.test(k) && !/^(using|with|including|for|to|in)\b/i.test(k)) skills.push(k)
     }
   }
-  p.skills = [...new Map(skills.map((k) => [k.toLowerCase(), k])).values()].slice(0, 40)
+  // Drop glyphs a PDF font couldn't map, and names of people or employers that slipped into the list.
+  const notSkills = new Set([p.name, ...p.roles.map((r) => r.org)].map((x) => x.toLowerCase()).filter(Boolean))
+  p.skills = [...new Map(skills.filter((k) => !/[\u0000-\u001f\ufffd]/.test(k) && !notSkills.has(k.toLowerCase())).map((k) => [k.toLowerCase(), k])).values()].slice(0, 40)
   if (!p.title && p.roles[0]) p.title = p.roles[0].title
   return p
 }

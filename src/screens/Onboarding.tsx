@@ -5,7 +5,7 @@ import type { Settings } from '../store'
 import { emptyProfile, levelFor, parseResume } from '../profile'
 import type { Profile, Role } from '../profile'
 import { extractText } from '../extract'
-import { MAX_PDF_BYTES, fileToBase64, profileAsText, readWithClaude } from '../ai'
+import { mergeProfiles, readWebsites } from '../web'
 import { Seg, SectionHead, Stepper, Toggle, useApp, useProfile } from '../ui'
 
 export const ONB = ['upload', 'review', 'prefs', 'schedule'] as const
@@ -52,7 +52,6 @@ export function Upload() {
   const [url, setUrl] = useState('')
   const [site, setSite] = useState('')
   const [fallback, setFallback] = useState(false)
-  const useClaude = s.reader === 'claude'
 
   const applyProfile = (profile: Profile, fileName: string) => {
     set({ profile, fileName, upload: 'done', skillOff: [], ...prefsFrom(profile) })
@@ -67,24 +66,13 @@ export function Upload() {
     if (!/\.(pdf|docx)$/i.test(f.name)) return setError(/\.doc$/i.test(f.name) ? 'Older .doc files can’t be read. Save it as .docx or PDF first.' : 'Please choose a PDF or DOCX file.')
     if (f.size > 10 * 1024 * 1024) return setError('That file is over 10 MB.')
     try {
-      if (useClaude) {
-        setBusy(`Claude is reading ${f.name}…`)
-        try {
-          const isPdf = /\.pdf$/i.test(f.name)
-          const file = isPdf && f.size <= MAX_PDF_BYTES ? { name: f.name, pdf: await fileToBase64(f) } : { name: f.name, text: await extractText(f) }
-          const { profile } = await readWithClaude({ file })
-          return applyProfile(profile, f.name)
-        } catch (e) {
-          // Claude unavailable: fall through to the built-in reader and say so.
-          setNote(`${e instanceof Error ? e.message : 'Claude couldn’t read it.'} Read with the basic reader instead — check the next screen carefully.`)
-        }
-      }
+
       setBusy(`Reading ${f.name}…`)
       const profile = parseResume(await extractText(f))
       if (!profile.name && !profile.roles.length && !profile.skills.length) {
         throw new Error('We couldn’t find any text in that file. If it’s a scanned image, export a text-based PDF or DOCX instead.')
       }
-      applyProfile({ ...profile, readBy: 'rules' }, f.name)
+      applyProfile(profile, f.name)
     } catch (e) {
       fail(e, 'Something went wrong reading that file.')
     } finally {
@@ -97,10 +85,12 @@ export function Upload() {
     setNote('')
     const u = site.trim()
     if (!/^(https?:\/\/)?[\w-]+(\.[\w-]+)+/i.test(u)) return setError('Paste a link to your portfolio, personal site or online resume.')
-    if (!useClaude) return setError('Reading websites needs the Claude reader. Turn it on in Settings → Resume reader.')
-    setBusy('Claude is reading your site and any resume it links to…')
+    setBusy('Reading your site and any resume it links to…')
     try {
-      const { profile, read } = await readWithClaude({ urls: [u] })
+      const { profile, read } = await readWebsites([u])
+      if (!profile.name && !profile.roles.length && !profile.skills.length) {
+        throw new Error('We opened the site but couldn’t find resume details on it. Try the direct link to your resume (PDF or Google Doc).')
+      }
       applyProfile(profile, read[0] ? `Website · ${new URL(read[0]).host}` : `Website · ${u}`)
       if (read.length > 1) setNote(`Also read: ${read.slice(1).join(', ')}`)
     } catch (e) {
@@ -132,23 +122,22 @@ export function Upload() {
         return
       }
       const handle = decodeURIComponent(url.match(/linkedin\.com\/in\/([\w%-]+)/i)?.[1] ?? 'profile')
-      const { links = [], details = '', ...li } = data.profile as Profile & { links?: string[]; details?: string }
-      let profile: Profile = { ...emptyProfile(), ...li, linkedin: li.linkedin || url.trim(), readBy: 'rules' }
+      const { links = [], ...li } = data.profile as Profile & { links?: string[] }
+      let profile: Profile = { ...emptyProfile(), ...li, linkedin: li.linkedin || url.trim() }
 
       // Follow the portfolio / resume links on the profile and merge what they say.
-      if (links.length && useClaude) {
+      if (links.length) {
         setBusy(`Reading ${links.length === 1 ? 'the link' : `${links.length} links`} on the profile: ${links.map((l) => l.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)).join(', ')}…`)
         try {
-          const merged = await readWithClaude({ urls: links, context: { name: `LinkedIn profile ${profile.linkedin}`, text: profileAsText(profile, details) } })
-          profile = { ...merged.profile, linkedin: profile.linkedin }
+          const merged = await readWebsites(links)
+          profile = mergeProfiles(profile, { ...merged.profile, website: links[0] })
           const missed = merged.skipped.length ? ` Couldn’t open: ${merged.skipped.join(', ')}.` : ''
           setNote(`Combined LinkedIn with ${merged.read.join(', ')}.${missed}`)
         } catch (e) {
           setNote(`Imported LinkedIn only. ${e instanceof Error ? e.message : ''} Links on the profile: ${links.join(', ')}`)
         }
-      } else if (links.length) {
-        setNote(`This profile links to ${links.join(', ')}. Turn on the Claude reader in Settings to include them.`)
       }
+
       applyProfile(profile, `LinkedIn · ${handle}`)
     } catch {
       setFallback(true)
@@ -212,7 +201,7 @@ export function Upload() {
                 <button className="btn" type="submit" style={smallBtn}>Import</button>
               </form>
               <div className="xs muted" style={{ lineHeight: 1.45 }}>
-                We read your public profile once{useClaude ? ', plus any portfolio or resume it links to' : ''}. Import your own profile only.
+                We read your public profile once, plus any portfolio or resume it links to. Import your own profile only.
               </div>
               {(fallback || !error) && (
                 <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -251,7 +240,7 @@ export function Upload() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="ellip" style={{ fontSize: 14.5, fontWeight: 500 }}>{s.fileName || 'Your profile'}</div>
                 <div className="small" style={{ color: 'var(--green)' }}>
-                  {p ? `${p.readBy === 'claude' ? 'Read by Claude' : 'Read'} · ${p.roles.length} ${p.roles.length === 1 ? 'role' : 'roles'} · ${p.skills.length} skills` : ''}
+                  {p ? `Read · ${p.roles.length} ${p.roles.length === 1 ? 'role' : 'roles'} · ${p.skills.length} skills` : ''}
                 </div>
               </div>
               <button className="u muted" onClick={() => { set({ upload: 'idle' }); setError(''); setNote('') }}>Replace</button>
@@ -263,9 +252,8 @@ export function Upload() {
       )}
 
       <div className="xs faint pretty">
-        {useClaude
-          ? 'Your resume is sent to Anthropic’s Claude API to be read. You can switch to the basic in-browser reader in Settings.'
-          : 'Your resume is read in your browser with the basic reader and isn’t sent anywhere.'}
+        Your resume is read in your browser and isn’t sent anywhere. Website links are downloaded by our server only so your browser can read them.
+
       </div>
     </div>
   )

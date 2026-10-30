@@ -1,7 +1,7 @@
 import { LIVE_SOURCES, PLANNED_SOURCES, fmtDate } from '../data'
 import type { Application } from '../data'
 import { fmtSalary } from '../store'
-import { Seg, Toggle, useApp } from '../ui'
+import { Toggle, useApp } from '../ui'
 
 function exportCsv(rows: Application[]) {
   const head = ['Date', 'Company', 'Role', 'Source', 'Status', 'Posting']
@@ -42,21 +42,6 @@ export function Settings() {
               <span className="muted ellip" style={{ textAlign: 'right', maxWidth: '60%' }}>{v} ›</span>
             </button>
           ))}
-        </div>
-      </div>
-
-      <div className="stack" style={{ gap: 8 }}>
-        <div className="eyebrow" style={{ padding: '0 4px' }}>RESUME READER</div>
-        <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Seg size="md" options={['claude', 'rules'] as const} value={s.reader} onChange={(v) => set({ reader: v })} labels={{ claude: 'Claude AI', rules: 'Basic (in browser)' }} />
-          <div className="xs muted" style={{ lineHeight: 1.45 }}>
-            {s.reader === 'claude'
-              ? 'Claude reads any layout, follows portfolio and resume links on LinkedIn, and can read websites. Your resume is sent to Anthropic to be read.'
-              : 'Pattern rules in your browser. Free and private, but misses things on unusual layouts and can’t read websites.'}
-          </div>
-          {s.profile && s.reader === 'claude' && s.profile.readBy !== 'claude' && (
-            <button className="btn soft" onClick={() => { set({ upload: 'idle' }); go('upload') }}>Re-read my resume with Claude</button>
-          )}
         </div>
       </div>
 

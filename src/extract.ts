@@ -1,7 +1,7 @@
 // Turns an uploaded PDF or DOCX into plain text, entirely in the browser.
 // The libraries are loaded on demand so they don't weigh down the first page load.
 
-async function pdfText(buf: ArrayBuffer): Promise<string> {
+export async function pdfText(buf: ArrayBuffer): Promise<string> {
   const pdfjs = await import('pdfjs-dist')
   pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise
