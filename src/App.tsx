@@ -5,6 +5,7 @@ import type { Ctx } from './ui'
 import { ONB, OnboardingHeader, Prefs, Review, Schedule, Upload } from './screens/Onboarding'
 import { JobDetail, Matches } from './screens/Matches'
 import { AppDetail, Applications } from './screens/Applications'
+import { Alerts } from './screens/Alerts'
 import { Settings } from './screens/Settings'
 import { useSearch } from './search'
 
@@ -56,7 +57,7 @@ export default function App() {
 
   const [screen, param] = parts
   const onbIdx = ONB.indexOf(screen as (typeof ONB)[number])
-  const known = ['matches', 'job', 'apps', 'settings']
+  const known = ['matches', 'job', 'apps', 'settings', 'alerts']
   // Not set up yet: everything outside onboarding redirects to its first step.
   const fallback = s.onboarded ? 'matches' : 'upload'
   const valid = onbIdx >= 0 || (s.onboarded && known.includes(screen))
@@ -65,7 +66,7 @@ export default function App() {
   }, [valid, fallback])
   if (!valid) return null
 
-  const active = screen === 'job' ? 'matches' : screen
+  const active = screen === 'job' ? 'matches' : screen === 'alerts' ? 'settings' : screen
 
   let body
   switch (screen) {
@@ -77,6 +78,7 @@ export default function App() {
     case 'job': body = <JobDetail id={decodeURIComponent(param ?? '')} />; break
     case 'apps': body = param ? <AppDetail id={param} /> : <Applications />; break
     case 'settings': body = <Settings />; break
+    case 'alerts': body = <Alerts />; break
   }
 
   const onboarding = onbIdx >= 0

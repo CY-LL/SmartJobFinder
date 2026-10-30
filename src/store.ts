@@ -30,6 +30,8 @@ export interface Settings {
   conn: Record<string, boolean>
   /** Employers whose job boards are read directly. */
   employers: Employer[]
+  /** The mail folder LinkedIn and Indeed job alerts are put in. */
+  mailFolder: string
   /** Postings from the latest searches, newest search first. */
   jobs: Job[]
   jobStatus: Record<string, JobStatus>
@@ -61,8 +63,9 @@ export const DEFAULTS: Settings = {
   freq: 'Weekdays',
   time: '07:00',
   noReapply: true,
-  conn: { Employers: true, Himalayas: true, Jobicy: true, Remotive: true, 'Remote OK': true, LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank': true, Workopolis: true, 'Google Jobs': true },
+  conn: { 'Email alerts': true, Employers: true, Himalayas: true, Jobicy: true, Remotive: true, 'Remote OK': true, LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank': true, Workopolis: true, 'Google Jobs': true },
   employers: [],
+  mailFolder: 'joboffers',
   jobs: [],
   jobStatus: {},
   docs: {},

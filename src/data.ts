@@ -61,6 +61,7 @@ export interface Employer { ats: 'greenhouse' | 'lever' | 'ashby' | 'workable' |
  * paid ones are Apify scrapers run by /api/jobs, which use Apify credit.
  */
 export const SOURCES: { name: string; note: string; paid: boolean }[] = [
+  { name: 'Email alerts', note: 'LinkedIn and Indeed alerts in your mail folder', paid: false },
   { name: 'Employers', note: 'Career pages you add below', paid: false },
   { name: 'Himalayas', note: 'Remote jobs open to Canada', paid: false },
   { name: 'Jobicy', note: 'Remote jobs open to Canada', paid: false },
@@ -77,6 +78,8 @@ export const SOURCE_NAMES = SOURCES.map((x) => x.name)
 export const PAID_SOURCES = SOURCES.filter((x) => x.paid).map((x) => x.name)
 /** The site a posting is shown as coming from: an employer's own board shows as their careers page. */
 export const sourceLabel = (j: Pick<Job, 'source' | 'company'>) => (j.source === 'Employers' ? `${j.company} careers` : j.source)
+/** The site the Apply button opens. */
+export const applySite = (j: Pick<Job, 'source' | 'company' | 'via'>) => (j.source === 'Employers' ? j.company : j.source === 'Email alerts' ? j.via ?? 'the job site' : j.source)
 
 export const APP_STATUS_COLORS: Record<AppStatus, [string, string]> = {
   Applied: ['var(--line-2)', 'var(--ink)'],

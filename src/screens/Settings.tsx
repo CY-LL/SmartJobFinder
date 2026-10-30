@@ -32,6 +32,7 @@ export function Settings() {
     ['Salary', `${fmtSalary(s, s.salMin)}+${hourly ? '' : ' /yr'}`, 'prefs'],
     ['Level', `${s.levels.join(', ') || 'None'} · ≤${s.years} yrs`, 'prefs'],
     ['Schedule', `${s.freq} ${s.time}`, 'schedule'],
+    ['Job alert emails', s.conn['Email alerts'] === false ? 'Off' : `Folder: ${s.mailFolder || 'joboffers'}`, 'alerts'],
   ]
 
   return (

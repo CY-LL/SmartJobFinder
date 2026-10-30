@@ -24,6 +24,16 @@ async function freeSearch(s: Settings, searches: PlannedSearch[], sources: strin
   return data.jobs
 }
 
+/** Job alert emails in the user's mail folder, read by /api/mail. Skipped quietly until the mailbox is set up. */
+async function mailSearch(s: Settings, failed: string[]): Promise<Job[]> {
+  const res = await fetch('/api/mail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: s.mailFolder || 'joboffers', days: s.postedWithin ?? 7 }) })
+  const data = await res.json().catch(() => ({}))
+  if (res.status === 501) return []
+  if (!res.ok || !data.jobs) throw new Error(data.message ?? 'Your job alert emails couldn’t be read.')
+  failed.push(...(data.failed ?? []))
+  return data.jobs
+}
+
 /** The paid sources: Apify scrapers started by /api/jobs, then polled until every run has finished. */
 async function apifySearch(s: Settings, searches: PlannedSearch[], sources: string[], failed: string[], progress: (text: string) => void): Promise<Job[]> {
   // The Apify account runs only a few scrapers at once, so the server starts what fits and hands back
@@ -63,7 +73,7 @@ async function apifySearch(s: Settings, searches: PlannedSearch[], sources: stri
 }
 
 /** One list from every source: the same posting often appears on several, so keep the first copy. */
-function merge(...lists: Job[][]): Job[] {
+export function merge(...lists: Job[][]): Job[] {
   const seen = new Set<string>()
   return lists.flat().filter((j) => {
     // Company names differ between sites ("Barracuda" vs "Barracuda Networks"), so compare the first word.
@@ -88,12 +98,13 @@ export function useSearch(s: Settings, set: (p: Patch) => void) {
       const sources = SOURCE_NAMES.filter((k) => s.conn[k] !== false)
       if (!sources.length) throw new Error('Turn on at least one source in Settings → Job sources.')
       const paid = sources.filter((k) => PAID_SOURCES.includes(k))
-      const free = sources.filter((k) => !PAID_SOURCES.includes(k))
+      const free = sources.filter((k) => !PAID_SOURCES.includes(k) && k !== 'Email alerts')
       const searches = searchesFor(s.profile, s)
       const failed: string[] = []
-      // Both kinds run at once; if one fails, the other's results are still kept.
+      // Every kind runs at once; if one fails, the others' results are still kept.
+      const mailJobs = sources.includes('Email alerts') ? mailSearch(s, failed).catch((e) => { failed.push(`Email alerts: ${errorText(e, 'failed')}`); return [] as Job[] }) : Promise.resolve([])
       const freeJobs = free.length ? freeSearch(s, searches, free, failed) : Promise.resolve([])
-      if (!paid.length) setState((x) => ({ ...x, progress: `Searching ${free.length} free sources…` }))
+      if (!paid.length) setState((x) => ({ ...x, progress: 'Searching free sources…' }))
       const paidJobs = paid.length ? apifySearch(s, searches, paid, failed, (progress) => setState((x) => ({ ...x, progress }))) : Promise.resolve([])
       const [f, p] = await Promise.allSettled([freeJobs, paidJobs])
       if (f.status === 'rejected' && p.status === 'rejected') throw p.reason
@@ -102,7 +113,7 @@ export function useSearch(s: Settings, set: (p: Patch) => void) {
       const got = (r: PromiseSettledResult<Job[]>) => (r.status === 'fulfilled' ? r.value : [])
       // Employers' own boards first, so a posting found there keeps the employer's direct link.
       const direct = got(f).filter((j) => j.source === 'Employers')
-      const found = merge(direct, got(p), got(f).filter((j) => j.source !== 'Employers'))
+      const found = merge(direct, got(p), await mailJobs, got(f).filter((j) => j.source !== 'Employers'))
       set((prev) => {
         // Keep postings the user acted on; replace everything else with the fresh results.
         const keep = prev.jobs.filter((j) => prev.jobStatus[j.id] && !found.some((x) => x.id === j.id))

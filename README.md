@@ -39,6 +39,16 @@ Jobs come from free sources and paid ones. Both run at once; if one side fails, 
 
 Postings are kept when their title contains the words of one of the user's titles or skill roles, and when they fall inside the "posted within" window.
 
+### Job alert emails
+
+`/api/mail` ([`netlify/functions/mail.mts`](netlify/functions/mail.mts)) reads LinkedIn and Indeed job alert emails from one mail folder (default `joboffers`, set on Settings → Job alert emails). It connects over IMAP read-only, reads the emails from the "posted within" window (up to 60), and turns each job card into a posting ([`netlify/lib/alerts.mts`](netlify/lib/alerts.mts)). Jobs keep the same ids as the Apify LinkedIn and Indeed searches, so a job found both ways shows once. Set in Netlify:
+
+- `MAIL_USER` — the email address
+- `MAIL_PASSWORD` — for Gmail, an app password (myaccount.google.com/apppasswords; needs 2-Step Verification)
+- `MAIL_HOST`, `MAIL_PORT` — only for providers other than Gmail (defaults `imap.gmail.com`, `993`)
+
+A Gmail filter (`from:jobalerts-noreply@linkedin.com OR from:alert@indeed.com` → label `joboffers`) files alerts automatically. Without a mailbox, alert emails saved as `.eml` files can be added on the same page. Outlook.com no longer allows app passwords for IMAP.
+
 Not used: Job Bank's own site (its terms forbid scripts and scrapers; its open data is only monthly), Adzuna (paid), Arbeitnow (Europe only).
 
 ### Paid sources

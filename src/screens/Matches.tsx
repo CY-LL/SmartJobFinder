@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate, sourceLabel } from '../data'
+import { JOB_STATUS, SOURCE_NAMES, ago, applySite, fmtDate, sourceLabel } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
@@ -364,7 +364,7 @@ export function JobDetail({ id }: { id: string }) {
         <>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn outline" style={{ flex: 1, padding: 15 }} onClick={skip}>Skip</button>
-            <button className="btn acc" style={{ flex: 2, padding: 15 }} onClick={apply}>Apply on {job.source === 'Employers' ? job.company : job.source} ↗</button>
+            <button className="btn acc" style={{ flex: 2, padding: 15 }} onClick={apply}>Apply on {applySite(job)} ↗</button>
           </div>
           <div className="xs muted" style={{ textAlign: 'center', marginTop: -8 }}>Opens the posting so you can submit; we log it in Applications.</div>
         </>
