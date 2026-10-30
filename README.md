@@ -23,6 +23,26 @@ All reading is done in the browser with pattern rules ([`src/profile.ts`](src/pr
 - **LinkedIn PDF fallback** — when the lookup isn't configured or fails, the app walks the user through LinkedIn's *Save to PDF* and parses that file instead.
 ## Job search
 
+Jobs come from free sources and paid ones. Both run at once; if one side fails, the other's results are kept.
+
+### Free sources
+
+`/api/boards` ([`netlify/functions/boards.mts`](netlify/functions/boards.mts)) reads public job APIs whose terms allow showing their jobs elsewhere. It needs no key and costs nothing. Every posting keeps the board's own link and shows the board as its source, as their terms ask.
+
+| Source | What it reads | Terms |
+|---|---|---|
+| Employers | The public job boards of employers the user adds in Settings (Greenhouse, Lever, Ashby, Workable, SmartRecruiters). Paste a careers page and `GET /api/boards?detect=<link>` finds the board behind it. Only postings in Canada, or remote without another country named, are kept. | Published by each system for showing a company's jobs elsewhere |
+| Himalayas | `himalayas.app/jobs/api/search`, one call per title or role, jobs open to Canada | Apply with the `applicationLink`, unchanged |
+| Jobicy | `jobicy.com/api/v2/remote-jobs?geo=canada`, by industry | Credit Jobicy; apply buttons go to the original link |
+| Remotive | `remotive.com/api/remote-jobs`, by category | Link back and name Remotive; jobs are delayed 24 h; at most 4 calls a day |
+| Remote OK | `remoteok.com/api`, by tag | Link back and name Remote OK |
+
+Postings are kept when their title contains the words of one of the user's titles or skill roles, and when they fall inside the "posted within" window.
+
+Not used: Job Bank's own site (its terms forbid scripts and scrapers; its open data is only monthly), Adzuna (paid), Arbeitnow (Europe only).
+
+### Paid sources
+
 `/api/jobs` ([`netlify/functions/jobs.mts`](netlify/functions/jobs.mts)) searches six sources through Apify scrapers, using the profile's title near the user's city and remote in Canada:
 
 | Source | Scraper | Override |

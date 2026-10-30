@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate } from '../data'
+import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate, sourceLabel } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
@@ -89,7 +89,7 @@ export function Matches() {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}><div className="pct">{j.match}%</div><div className="muted" style={{ fontSize: 10.5 }}>match</div></div>
               </div>
               <div className="row">
-                <div className="meta">{[isPublicSector(j.company) ? 'Government' : '', j.type, j.mode, j.salary, j.via ? `${j.source} (${j.via})` : j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
+                <div className="meta">{[isPublicSector(j.company) ? 'Government' : '', j.type, j.mode, j.salary, j.via ? `${sourceLabel(j)} (${j.via})` : sourceLabel(j), ago(j.posted)].filter(Boolean).join(' · ')}</div>
                 <Status colors={st}>{st[0]}</Status>
               </div>
               {hidden && <div className="xs" style={{ color: 'var(--acc-fg)' }}>Hidden · {j.hidden === 'source' ? `${j.source} is turned off` : hiddenReason(j, s, j.match)}</div>}
@@ -284,7 +284,7 @@ export function JobDetail({ id }: { id: string }) {
     const app: Application = {
       id: 'a-' + job.id, jobId: job.id, company: job.company, role: job.title, date: now, source: job.source, url: job.url,
       status: 'Applied', level: job.level, yrs: job.yrs, desc: job.desc, tags: job.tags,
-      history: [{ e: edited ? 'Tailored resume & cover letter prepared and edited' : 'Tailored resume & cover letter prepared', d: now }, { e: `Applied via ${job.source}`, d: now }],
+      history: [{ e: edited ? 'Tailored resume & cover letter prepared and edited' : 'Tailored resume & cover letter prepared', d: now }, { e: `Applied via ${sourceLabel(job)}`, d: now }],
       // Keep exactly what was sent, so Applications can show it later even if the profile changes.
       resumeHtml: sanitize(resumeEl.current?.innerHTML ?? ''),
       coverHtml: sanitize(coverEl.current?.innerHTML ?? ''),
@@ -321,7 +321,7 @@ export function JobDetail({ id }: { id: string }) {
     <div className="screen" style={{ padding: '6px 20px 24px', gap: 18 }}>
       <button className="back" onClick={() => go('matches')}>← Matches</button>
       <div>
-        <div className="eyebrow" style={{ letterSpacing: '.06em' }}>{[job.source, job.via && `via ${job.via}`, job.posted && fmtDate(job.posted)].filter(Boolean).join(' · ').toUpperCase()}</div>
+        <div className="eyebrow" style={{ letterSpacing: '.06em' }}>{[sourceLabel(job), job.via && `via ${job.via}`, job.posted && fmtDate(job.posted)].filter(Boolean).join(' · ').toUpperCase()}</div>
         <div className="h1" style={{ fontSize: 28, marginTop: 6 }}>{job.title}</div>
         <div style={{ fontSize: 14, marginTop: 6 }}>{job.company}</div>
         <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{[job.type, job.loc, job.mode === 'Remote' ? '' : job.mode, job.salary].filter(Boolean).join(' · ')}</div>
@@ -364,7 +364,7 @@ export function JobDetail({ id }: { id: string }) {
         <>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn outline" style={{ flex: 1, padding: 15 }} onClick={skip}>Skip</button>
-            <button className="btn acc" style={{ flex: 2, padding: 15 }} onClick={apply}>Apply on {job.source} ↗</button>
+            <button className="btn acc" style={{ flex: 2, padding: 15 }} onClick={apply}>Apply on {job.source === 'Employers' ? job.company : job.source} ↗</button>
           </div>
           <div className="xs muted" style={{ textAlign: 'center', marginTop: -8 }}>Opens the posting so you can submit; we log it in Applications.</div>
         </>

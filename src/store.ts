@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import type { Application, Job, JobStatus } from './data'
+import type { Application, Employer, Job, JobStatus } from './data'
 import type { Profile } from './profile'
 
 export interface Settings {
@@ -28,6 +28,8 @@ export interface Settings {
   time: string
   noReapply: boolean
   conn: Record<string, boolean>
+  /** Employers whose job boards are read directly. */
+  employers: Employer[]
   /** Postings from the latest searches, newest search first. */
   jobs: Job[]
   jobStatus: Record<string, JobStatus>
@@ -59,7 +61,8 @@ export const DEFAULTS: Settings = {
   freq: 'Weekdays',
   time: '07:00',
   noReapply: true,
-  conn: { LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank': true, Workopolis: true, 'Google Jobs': true },
+  conn: { Employers: true, Himalayas: true, Jobicy: true, Remotive: true, 'Remote OK': true, LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank': true, Workopolis: true, 'Google Jobs': true },
+  employers: [],
   jobs: [],
   jobStatus: {},
   docs: {},

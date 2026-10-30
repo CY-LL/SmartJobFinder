@@ -53,16 +53,30 @@ export const PROVINCES = ['ON', 'QC', 'BC', 'AB', 'MB', 'SK', 'NS', 'NB', 'NL', 
 export const JOB_TYPES = ['Regular paid', 'Contract', 'Freelance', 'Co-op', 'Internship', 'Volunteer']
 export const LEVELS = ['Junior', 'Intermediate', 'Expert']
 
-/** Sources searched through /api/jobs, with what each adds. */
-export const SOURCES: { name: string; note: string }[] = [
-  { name: 'LinkedIn', note: 'via Apify' },
-  { name: 'Indeed', note: 'via Apify' },
-  { name: 'Glassdoor', note: 'via Apify' },
-  { name: 'Job Bank', note: 'Government of Canada · via Apify' },
-  { name: 'Workopolis', note: 'via Apify' },
-  { name: 'Google Jobs', note: 'Includes company career pages · about $0.07 per search' },
+/** An employer whose public job board is read directly (see netlify/functions/boards.mts). */
+export interface Employer { ats: 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'smartrecruiters'; slug: string; name: string }
+
+/**
+ * Where jobs come from, with what each adds. Free sources are public job APIs read by /api/boards;
+ * paid ones are Apify scrapers run by /api/jobs, which use Apify credit.
+ */
+export const SOURCES: { name: string; note: string; paid: boolean }[] = [
+  { name: 'Employers', note: 'Career pages you add below', paid: false },
+  { name: 'Himalayas', note: 'Remote jobs open to Canada', paid: false },
+  { name: 'Jobicy', note: 'Remote jobs open to Canada', paid: false },
+  { name: 'Remotive', note: 'Remote jobs · listed a day late', paid: false },
+  { name: 'Remote OK', note: 'Remote jobs', paid: false },
+  { name: 'LinkedIn', note: 'via Apify', paid: true },
+  { name: 'Indeed', note: 'via Apify', paid: true },
+  { name: 'Glassdoor', note: 'via Apify', paid: true },
+  { name: 'Job Bank', note: 'Government of Canada · via Apify', paid: true },
+  { name: 'Workopolis', note: 'via Apify', paid: true },
+  { name: 'Google Jobs', note: 'Includes company career pages · via Apify', paid: true },
 ]
 export const SOURCE_NAMES = SOURCES.map((x) => x.name)
+export const PAID_SOURCES = SOURCES.filter((x) => x.paid).map((x) => x.name)
+/** The site a posting is shown as coming from: an employer's own board shows as their careers page. */
+export const sourceLabel = (j: Pick<Job, 'source' | 'company'>) => (j.source === 'Employers' ? `${j.company} careers` : j.source)
 
 export const APP_STATUS_COLORS: Record<AppStatus, [string, string]> = {
   Applied: ['var(--line-2)', 'var(--ink)'],
