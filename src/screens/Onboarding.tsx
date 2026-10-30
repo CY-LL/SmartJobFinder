@@ -78,11 +78,18 @@ export function Upload() {
     if (!/linkedin\.com\/in\/[\w%-]+/i.test(url)) return setError('Paste your profile link, e.g. linkedin.com/in/your-name.')
     setBusy('Looking up your LinkedIn profile… this can take up to a minute.')
     try {
-      const res = await fetch('/api/linkedin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url.trim() }) })
-      const data = await res.json().catch(() => ({}))
+      let res = await fetch('/api/linkedin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url.trim() }) })
+      let data = await res.json().catch(() => ({}))
+      // The lookup runs in the background; check on it every few seconds for up to ~3 minutes.
+      for (let tries = 0; res.ok && data.runId && !data.profile && tries < 60; tries++) {
+        await new Promise((r) => setTimeout(r, 3000))
+        res = await fetch(`/api/linkedin?run=${encodeURIComponent(data.runId)}`)
+        const next = await res.json().catch(() => ({}))
+        data = next.status === 'running' ? data : next
+      }
       if (!res.ok || !data.profile) {
         setFallback(true)
-        setError(data.message ?? 'LinkedIn lookup isn’t available right now.')
+        setError(data.message ?? (data.runId ? 'The LinkedIn lookup is taking too long. Try again in a minute.' : 'LinkedIn lookup isn’t available right now.'))
         return
       }
       const handle = url.match(/linkedin\.com\/in\/([\w%-]+)/i)?.[1] ?? 'profile'
