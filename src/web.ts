@@ -3,7 +3,7 @@
 
 import { pdfText } from './extract'
 import { emptyProfile, parseResume } from './profile'
-import type { Profile } from './profile'
+import type { Education, Profile } from './profile'
 
 export interface WebRead {
   profile: Profile
@@ -57,6 +57,30 @@ function mergeBullets(base: string[], extra: string[]): string[] {
   return out.slice(0, 8)
 }
 
+/** Combine education lists: the same program (same school, same start year) keeps one entry with both sets of points. */
+function mergeEducation(base: Education[], extra: Education[]): Education[] | undefined {
+  const schoolWords = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z]+/).filter((w) => w.length >= 4 && !['college', 'university', 'school', 'institute'].includes(w))
+  const out: Education[] = base.map((e) => ({ ...e, highlights: [...(e.highlights ?? [])] }))
+  for (const e of extra) {
+    const match = out.find((b) => b.dates.slice(0, 4) === e.dates.slice(0, 4) && b.dates && schoolWords(b.school).some((w) => schoolWords(e.school).includes(w)))
+    if (!match) out.push({ ...e })
+    else {
+      match.highlights = mergeBullets(match.highlights ?? [], e.highlights ?? [])
+      match.school ||= e.school
+      match.credential ||= e.credential
+    }
+  }
+  // Most recent first by end year ("2023–26" ends in 2026); ongoing courses after finished programs, undated last.
+  const endYear = (d: string) => {
+    if (/ongoing|now/i.test(d)) return 1
+    const m = d.match(/(\d{4})(?:–(\d{2,4}))?/)
+    if (!m) return 0
+    return m[2] ? Number(m[2].length === 2 ? m[1].slice(0, 2) + m[2] : m[2]) : Number(m[1])
+  }
+  const all = out.map((e) => (e.highlights?.length ? e : { ...e, highlights: undefined })).sort((a, b) => endYear(b.dates) - endYear(a.dates))
+  return all.length ? all : undefined
+}
+
 /** Fill gaps in a profile with what another source found, without overwriting what's already there. */
 export function mergeProfiles(base: Profile, extra: Profile): Profile {
   // The same job is often worded differently on each source ("Christelle agency" vs "Agence Christelle"),
@@ -85,6 +109,7 @@ export function mergeProfiles(base: Profile, extra: Profile): Profile {
     linkedin: base.linkedin || extra.linkedin,
     website: base.website || extra.website,
     summary: base.summary || extra.summary,
+    education: mergeEducation(base.education ?? [], extra.education ?? []),
     roles: roles.slice(0, 15).map((r) => (r.highlights?.length ? r : { ...r, highlights: undefined })),
     skills: skills.slice(0, 50),
     years: Math.max(base.years, extra.years),

@@ -57,6 +57,19 @@ function normalize(raw: Json) {
     highlights: points(str(e.description)),
   })).filter((r) => r.title)
 
+  const education = ((raw.education ?? []) as Json[]).map((e) => {
+    const degree = str(e.degree), field = str(e.fieldOfStudy)
+    // "Diploma" + "Professional Writing" → "Diploma in Professional Writing"; skip the field when the degree already names it.
+    const credential = degree && field && !degree.toLowerCase().includes(field.toLowerCase()) ? `${degree} in ${field}` : degree || field
+    const honours = str(e.insights ?? e.activities).replace(/^activities and societies:\s*/i, '')
+    return {
+      credential,
+      school: str(e.schoolName ?? e.title).replace(/ of Applied Arts and Technology$/i, ''),
+      dates: dates(e),
+      highlights: [...(honours ? [honours] : []), ...points(str(e.description))].slice(0, 5),
+    }
+  }).filter((e) => e.credential || e.school)
+
   const spans = exps.map(monthsOf).filter((x): x is [number, number] => !!x).sort((a, b) => a[0] - b[0])
   let months = 0, s = -1, e = -1
   for (const [a, b] of spans) {
@@ -92,6 +105,7 @@ function normalize(raw: Json) {
     phone: str(raw.mobileNumber ?? raw.phone),
     linkedin: str(raw.linkedinUrl ?? raw.url ?? raw.profileUrl),
     roles: roles.slice(0, 12),
+    education: education.slice(0, 6),
     skills: [...new Set(skills)].slice(0, 40),
     years,
     level: years >= 7 ? 'Expert' : years >= 3 ? 'Intermediate' : 'Junior',

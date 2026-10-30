@@ -40,7 +40,7 @@ There's no server-side scheduler or user accounts: a scheduled search runs when 
 
 ## Applying
 
-Each match gets a resume and cover letter built from the user's own bullets ([`src/match.ts`](src/match.ts) `tailor`). Both can be edited per job before applying ([`src/screens/DocBox.tsx`](src/screens/DocBox.tsx)), copied as text, or printed / saved as PDF. "Apply on …" opens the posting; the documents exactly as sent are stored with the application.
+Each match gets a resume and cover letter built from the user's own bullets and education (education comes first for recent graduates; the most relevant program and its best point go into the cover letter) ([`src/match.ts`](src/match.ts) `tailor`). Both can be edited per job before applying ([`src/screens/DocBox.tsx`](src/screens/DocBox.tsx)), copied as text, or printed / saved as PDF. "Apply on …" opens the posting; the documents exactly as sent are stored with the application.
 
 ## Status
 

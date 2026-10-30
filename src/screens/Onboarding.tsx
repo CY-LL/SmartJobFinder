@@ -3,7 +3,7 @@ import { CITIES, JOB_TYPES, LEVELS, PROVINCES } from '../data'
 import { fmtSalary, toggleIn } from '../store'
 import type { Settings } from '../store'
 import { emptyProfile, levelFor, parseResume } from '../profile'
-import type { Profile, Role } from '../profile'
+import type { Education, Profile, Role } from '../profile'
 import { extractText } from '../extract'
 import { mergeProfiles, readWebsites } from '../web'
 import { Seg, SectionHead, Stepper, Toggle, useApp, useProfile } from '../ui'
@@ -337,6 +337,8 @@ export function Review() {
   const p = useProfile()
   const [skill, setSkill] = useState('')
   const [role, setRole] = useState<Role>({ title: '', org: '', dates: '' })
+  const [school, setSchool] = useState<Education>({ credential: '', school: '', dates: '' })
+  const edu = p.education ?? []
   const edit = (patch: Partial<Profile>) => set({ profile: { ...p, ...patch } })
   const addSkill = () => {
     const k = skill.trim()
@@ -403,6 +405,33 @@ export function Review() {
           >
             {(['title', 'org', 'dates'] as const).map((k) => (
               <input key={k} className="text-input" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '7px 8px', background: 'var(--card)', fontSize: 13 }} placeholder={{ title: 'Title', org: 'Company', dates: '2020–22' }[k]} aria-label={`New role ${k}`} value={role[k]} onChange={(e) => setRole({ ...role, [k]: e.target.value })} />
+            ))}
+            <button className="chip" type="submit">Add</button>
+          </form>
+        </div>
+      </div>
+      <div>
+        <div className="eyebrow" style={{ marginBottom: 10 }}>EDUCATION</div>
+        <div style={{ borderTop: '1px solid var(--line)' }}>
+          {edu.length === 0 && <div className="small muted" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>No education found. Add it below.</div>}
+          {edu.map((e, i) => (
+            <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="row" style={{ alignItems: 'flex-start' }}>
+                <div style={{ minWidth: 0 }}><div style={{ fontSize: 14.5, fontWeight: 500 }}>{e.credential || 'Program'}</div><div className="muted" style={{ fontSize: 13 }}>{e.school}</div></div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                  <div className="mono muted" style={{ fontSize: 11.5, whiteSpace: 'nowrap' }}>{e.dates}</div>
+                  <button className="circle-btn" aria-label={`Remove ${e.credential}`} onClick={() => edit({ education: edu.filter((_, k) => k !== i) })}>✕</button>
+                </div>
+              </div>
+              <Bullets items={e.highlights ?? []} onChange={(highlights) => edit({ education: edu.map((x, k) => (k === i ? { ...x, highlights } : x)) })} />
+            </div>
+          ))}
+          <form
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px auto', gap: 6, paddingTop: 10 }}
+            onSubmit={(e) => { e.preventDefault(); if (school.credential.trim() || school.school.trim()) { edit({ education: [...edu, school] }); setSchool({ credential: '', school: '', dates: '' }) } }}
+          >
+            {(['credential', 'school', 'dates'] as const).map((k) => (
+              <input key={k} className="text-input" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '7px 8px', background: 'var(--card)', fontSize: 13 }} placeholder={{ credential: 'Diploma / degree', school: 'School', dates: '2021–23' }[k]} aria-label={`New education ${k}`} value={school[k]} onChange={(ev) => setSchool({ ...school, [k]: ev.target.value })} />
             ))}
             <button className="chip" type="submit">Add</button>
           </form>

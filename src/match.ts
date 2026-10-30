@@ -98,6 +98,28 @@ export interface Tailored {
   roles: TailoredRole[]
   /** The single most relevant bullet, with its role, for the cover letter. */
   best: { text: string; title: string; org: string }[]
+  education: TailoredEducation[]
+  /** Recent graduates and early-career profiles lead with education. */
+  educationFirst: boolean
+  /** The most relevant program, and one of its points if it fits the posting, for the cover letter. */
+  bestEducation?: { credential: string; school: string; dates: string; recent: boolean; point?: string }
+}
+
+export interface TailoredEducation {
+  credential: string
+  school: string
+  dates: string
+  bullets: { text: string; relevant: boolean }[]
+}
+
+const HONOURS = /\b(honou?rs?|dean'?s|award|scholarship|gpa|distinction|cum laude|valedictorian|medal)\b/i
+
+/** The year a program or role ends: "Ongoing"/"NOW" count as this year, "2023–26" as 2026. */
+export function endYearOf(dates: string): number {
+  if (/ongoing|now|present/i.test(dates)) return new Date().getFullYear()
+  const m = dates.match(/(\d{4})(?:–(\d{2,4}))?/)
+  if (!m) return 0
+  return m[2] ? Number(m[2].length === 2 ? m[1].slice(0, 2) + m[2] : m[2]) : Number(m[1])
 }
 
 const keywordsOf = (text: string) => new Set(words(text).filter((w) => w.length > 3))
@@ -147,5 +169,31 @@ export function tailor(p: Profile, skills: string[], job: Pick<Job, 'title' | 'd
     if (best.every((x) => overlap(x.text, b.text) < 0.4)) best.push({ text: b.text, title: b.title, org: b.org })
   }
 
-  return { matched, rest: skills.filter((k) => !matched.includes(k)), summary, roles, best }
+  // Education: the most relevant program keeps two points, others one if it fits the posting; honours always stay.
+  const eduScored = (p.education ?? []).map((e) => {
+    const bullets = (e.highlights ?? []).map((text, i) => ({ text, i, score: scoreBullet(text) + (HONOURS.test(text) ? 3 : 0) }))
+    const fit = [...keywordsOf(e.credential)].filter((w) => jobWords.has(w)).length
+    return { e, bullets, score: Math.max(0, ...bullets.map((b) => b.score)) + 3 * fit }
+  })
+  const topEdu = [...eduScored].sort((a, b) => b.score - a.score || endYearOf(b.e.dates) - endYearOf(a.e.dates))[0]
+  // Finished programs newest first, then ongoing courses, then undated entries.
+  const eduOrder = (d: string) => (/ongoing|now|present/i.test(d) ? 1 : endYearOf(d))
+  const education: TailoredEducation[] = [...eduScored].sort((a, b) => eduOrder(b.e.dates) - eduOrder(a.e.dates)).map(({ e, bullets }) => {
+    const keep = topEdu && e === topEdu.e ? 2 : 1
+    const honours = bullets.filter((b) => HONOURS.test(b.text))
+    const points = bullets.filter((b) => !HONOURS.test(b.text)).sort((a, b) => b.score - a.score || a.i - b.i).filter((b) => b.score > 0 || e === topEdu?.e).slice(0, keep)
+    return {
+      credential: e.credential, school: e.school, dates: e.dates,
+      bullets: [...honours.slice(0, 1).map((b) => ({ text: b.text, relevant: false })), ...points.map((b) => ({ text: b.text, relevant: b.score >= 2 }))],
+    }
+  })
+  const thisYear = new Date().getFullYear()
+  const latestEnd = Math.max(0, ...(p.education ?? []).map((e) => (/ongoing/i.test(e.dates) ? 0 : endYearOf(e.dates))))
+  const educationFirst = education.length > 0 && (p.years < 3 || latestEnd >= thisYear - 1)
+  const eduPoint = topEdu?.bullets.filter((b) => b.score >= 3 && !HONOURS.test(b.text) && best.every((x) => overlap(x.text, b.text) < 0.4)).sort((a, b) => b.score - a.score)[0]
+  const bestEducation = topEdu && topEdu.e.credential && !/ongoing/i.test(topEdu.e.dates)
+    ? { credential: topEdu.e.credential, school: topEdu.e.school, dates: topEdu.e.dates, recent: endYearOf(topEdu.e.dates) >= thisYear - 1, point: eduPoint?.text }
+    : undefined
+
+  return { matched, rest: skills.filter((k) => !matched.includes(k)), summary, roles, best, education, educationFirst, bestEducation }
 }

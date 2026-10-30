@@ -8,6 +8,15 @@ export interface Role {
   highlights?: string[]
 }
 
+export interface Education {
+  /** e.g. "Advanced Diploma in Graphic Design" */
+  credential: string
+  school: string
+  dates: string
+  /** Projects, coursework and honours, word for word. */
+  highlights?: string[]
+}
+
 export interface Profile {
   name: string
   title: string
@@ -19,6 +28,7 @@ export interface Profile {
   /** Their own summary: a resume Summary section, LinkedIn About, or a portfolio intro. */
   summary?: string
   roles: Role[]
+  education?: Education[]
   skills: string[]
   years: number
   level: 'Junior' | 'Intermediate' | 'Expert'
@@ -217,6 +227,52 @@ export function parseResume(text: string): Profile {
     const kept = items.filter((x) => x.length >= 25 && x.length <= 400 && !/[\u0000-\u001f\ufffd]/.test(x)).slice(0, 6)
     if (kept.length) p.roles[a.role].highlights = kept
   })
+
+  // Education: same idea as roles, inside the Education section. Dates may sit on their own line
+  // (portfolio sites), on the credential line ("BSc …, University of …, 2013 - 2017"), or be "Ongoing".
+  const SCHOOL_RE = /\b(university|université|college|collège|cégep|cegep|school|institute|institut|academy|polytechnic|udemy|coursera|linkedin learning|bootcamp)\b/i
+  const DEGREE_RE = /\b(bachelor|master|ph\.?d|doctorate|diploma|degree|certificate|certification|b\.?sc|b\.?a|b\.?f\.?a|m\.?b\.?a|associate|program|courses?|major|minor|honours?)\b/i
+  const HONOURS_RE = /\b(honou?rs?|dean'?s|award|scholarship|gpa|distinction|cum laude|valedictorian|medal)\b/i
+  const eduAnchors: number[] = []
+  tagged.forEach((t, i) => {
+    if (t.section !== 'education' || !(RANGE_RE.test(t.line) || SINGLE_YEAR_RE.test(t.line) || /^(ongoing|in progress|present|current)$/i.test(t.line))) return
+    // "Algonquin College · 3-year program · 2023–2026" right under a date line repeats that entry's dates.
+    const prev = eduAnchors[eduAnchors.length - 1]
+    if (prev !== undefined && i - prev <= 2) return
+    eduAnchors.push(i)
+  })
+  const education: Education[] = []
+  eduAnchors.forEach((a, k) => {
+    const line = tagged[a].line
+    const m = line.match(RANGE_RE)
+    const single = line.match(SINGLE_YEAR_RE)
+    const dates = m ? shortDates(m[1], m[2]) : single ? single[1].match(/(19|20)\d{2}/)?.[0] ?? '' : 'Ongoing'
+    const rest = clean(line.replace(m?.[0] ?? single?.[0] ?? line, '').replace(/[()]/g, ''))
+    const near = (idx: number[]) => idx.map((j) => tagged[j]).filter((x) => x && x.section === 'education' && !isBullet(x.line) && !SINGLE_YEAR_RE.test(x.line) && x.line.length < 120).map((x) => clean(x.line))
+    const sameLine = rest.split(/\s+(?:—|–|\||·)\s+|,\s+/).map(clean).filter(Boolean)
+    // Portfolio layout puts the credential and school after the dates; resumes and LinkedIn PDFs before.
+    const after = near([a + 1, a + 2]), before = near([a - 1, a - 2])
+    const cand = (sameLine.length >= 2 ? sameLine : [...sameLine, ...(after.some((x) => SCHOOL_RE.test(x) || DEGREE_RE.test(x)) ? after : before)])
+      .map((x) => x.split(/\s+·\s+/)[0].replace(RANGE_RE, '').trim()).filter(Boolean)
+    // A school line names an institution without a credential ("Ontario College Diploma" is a credential).
+    const school = cand.find((x) => SCHOOL_RE.test(x) && !DEGREE_RE.test(x)) ?? cand.find((x) => SCHOOL_RE.test(x)) ?? cand.find((x) => !DEGREE_RE.test(x)) ?? ''
+    const credential = cand.find((x) => x !== school && DEGREE_RE.test(x)) ?? cand.find((x) => x !== school) ?? ''
+    if (!credential && !school) return
+    const end = eduAnchors[k + 1] ?? tagged.length
+    const items: string[] = []
+    for (let j = a + 1; j < end; j++) {
+      const { line: l, section } = tagged[j]
+      if (section !== 'education') break
+      const text = clean(l.replace(/^[•●▪◦\-*–·¶]\s*/, ''))
+      const last = items.length - 1
+      if (isBullet(l) || /^[¶•]/.test(l)) items.push(text)
+      else if (HONOURS_RE.test(text) && text.length < 90 && !SCHOOL_RE.test(text)) items.push(text)
+      else if (last >= 0 && !/[.!?]$/.test(items[last]) && /^[a-z(&,]/.test(text)) items[last] += ' ' + text
+    }
+    const kept = items.filter((x) => x.length >= 12 && x.length <= 400 && x !== credential).slice(0, 5)
+    education.push({ credential: credential.slice(0, 100), school: school.slice(0, 100), dates, ...(kept.length ? { highlights: kept } : {}) })
+  })
+  if (education.length) p.education = education.slice(0, 6)
 
   // Their own summary: a Summary/Profile section, or a first-person intro on a portfolio page.
   // Only full sentences count: menus and taglines also sit under headings like "About".

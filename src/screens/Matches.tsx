@@ -3,7 +3,8 @@ import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
-import { tailor } from '../match'
+import { endYearOf, tailor } from '../match'
+import type { Tailored, TailoredEducation } from '../match'
 import { DocBox, printDoc, sanitize } from './DocBox'
 
 type Filter = 'All' | 'New' | 'Applied'
@@ -117,7 +118,7 @@ function inFirstPerson(text: string, org: string, sameOrgAsBefore = false) {
 }
 
 export function TailoredResume({ job }: { job: JobLike }) {
-  const { p, matched, rest, summary, roles } = useTailoring(job)
+  const { p, matched, rest, summary, roles, education, educationFirst } = useTailoring(job)
   return (
     <>
       <div className="serif" style={{ fontSize: 18 }}>{p.name || 'Your name'}</div>
@@ -127,18 +128,18 @@ export function TailoredResume({ job }: { job: JobLike }) {
         {summary || <>{p.title || 'Professional'}{p.years > 0 && ` with ${p.years} years of experience`}.</>}{' '}
         {matched.length > 0 && <span className="hl">Skills for this role: {matched.slice(0, 5).join(', ')}.</span>}
       </div>
+      {educationFirst && <EducationSection education={education} />}
       <div className="sec">EXPERIENCE</div>
       <div className="mb">
         {roles.length === 0 && <div className="muted">No roles on your profile yet.</div>}
         {roles.map((r, i) => (
           <div key={i} style={{ marginBottom: 6 }}>
             <div style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
-            {r.bullets.map((b) => (
-              <div key={b.text} style={{ paddingLeft: 10, textIndent: -10 }}>• {b.relevant ? <span className="hl">{b.text}</span> : b.text}</div>
-            ))}
+            <Points bullets={r.bullets} />
           </div>
         ))}
       </div>
+      {!educationFirst && <EducationSection education={education} />}
       <div className="sec">SKILLS</div>
       <div>
         {matched.length > 0 && <span className="hl">{matched.join(', ')}</span>}
@@ -149,8 +150,40 @@ export function TailoredResume({ job }: { job: JobLike }) {
   )
 }
 
+function Points({ bullets }: { bullets: { text: string; relevant: boolean }[] }) {
+  return <>{bullets.map((b) => <div key={b.text} style={{ paddingLeft: 10, textIndent: -10 }}>• {b.relevant ? <span className="hl">{b.text}</span> : b.text}</div>)}</>
+}
+
+function EducationSection({ education }: { education: TailoredEducation[] }) {
+  if (!education.length) return null
+  return (
+    <>
+      <div className="sec">EDUCATION</div>
+      <div className="mb">
+        {education.map((e, i) => (
+          <div key={i} style={{ marginBottom: 6 }}>
+            <div style={{ fontWeight: 500 }}>{e.credential}{e.school && ` — ${e.school}`}{e.dates && `, ${e.dates}`}</div>
+            <Points bullets={e.bullets} />
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/** "I recently completed the Advanced Diploma in Graphic Design at Algonquin College (2026). There, I produced…" */
+function educationSentence(e: NonNullable<Tailored['bestEducation']>) {
+  const year = endYearOf(e.dates)
+  const where = `${e.credential}${e.school ? ` at ${e.school}` : ''}${year ? ` (${year})` : ''}`
+  const lead = e.recent ? `I recently completed the ${where}.` : `My education includes the ${where}.`
+  if (!e.point) return lead
+  const first = e.point.split(/\s/)[0]
+  const t = e.point.replace(/\.$/, '')
+  return /^[A-Z][a-z]+ed$/.test(first) ? `${lead} There, I ${t.charAt(0).toLowerCase()}${t.slice(1)}.` : `${lead} ${t}.`
+}
+
 export function CoverLetter({ job, company }: { job: JobLike; company: string }) {
-  const { p, matched, best } = useTailoring(job)
+  const { p, matched, best, bestEducation } = useTailoring(job)
   const [r1, r2] = p.roles
   return (
     <>
@@ -171,6 +204,7 @@ export function CoverLetter({ job, company }: { job: JobLike; company: string })
           {r2 ? `, and before that as ${r2.title}${r2.org ? ` at ${r2.org}` : ''}` : ''}.
         </div>
       )}
+      {bestEducation && <div style={{ marginBottom: 8 }}>{bestEducation.point ? <span className="hl">{educationSentence(bestEducation)}</span> : educationSentence(bestEducation)}</div>}
       <div style={{ marginBottom: 12 }}>I'd welcome the chance to talk about how I could contribute.</div>
       <div>{p.name}</div>
     </>
