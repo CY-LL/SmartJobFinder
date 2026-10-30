@@ -114,7 +114,7 @@ export function Alerts() {
               <li>Project Settings (⚙) → tick “Show appsscript.json manifest file”. Back in the Editor, replace appsscript.json with the manifest below.</li>
               <li>Deploy → New deployment → type Web app. Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Deploy.</li>
               <li>Authorize with your Google account. Google says it hasn't verified the app because it's your own script: choose Advanced → Go to SmartJobFinder → Allow. It asks only to <i>view</i> your email.</li>
-              <li>Copy the Web app URL.</li>
+              <li>Copy the Web app URL. (Opening it in a browser just shows “script is running”; the app reads mail through it, not the browser.)</li>
             </ol>
             <CodeBox title="Code.gs" text={code} onCopy={() => copy(code, 'Script')} />
             <CodeBox title="appsscript.json" text={SCRIPT_MANIFEST} onCopy={() => copy(SCRIPT_MANIFEST, 'Manifest')} />

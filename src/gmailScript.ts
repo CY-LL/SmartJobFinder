@@ -40,6 +40,11 @@ function doPost(e) {
   return reply({ label: LABEL, emails: emails });
 }
 
+// Opening the web app URL in a browser lands here. It shares nothing; it only confirms the script is running.
+function doGet() {
+  return reply({ ok: true, message: 'Your SmartJobFinder Gmail script is running. Go back to SmartJobFinder, paste this page’s address and press Connect.' });
+}
+
 function reply(body) {
   return ContentService.createTextOutput(JSON.stringify(body)).setMimeType(ContentService.MimeType.JSON);
 }
