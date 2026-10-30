@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EDE7DD;font-family:'Geist',system-ui,sans-serif;color:#1E1B17;-webkit-font-smoothing:antialiased}
+a{color:#1E1B17}a:hover{color:oklch(0.56 0.13 45)}
+*{box-sizing:border-box}
+input{font-family:inherit}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes sjfspin{to{transform:rotate(360deg)}}
+@keyframes sjfbar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;gap:48px;align-items:center;justify-content:center;padding:40px 24px;flex-wrap:wrap">
+
+<sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+<div style="width:220px;display:flex;flex-direction:column;gap:4px">
+  <div style="font-family:'Newsreader',serif;font-size:26px;letter-spacing:-0.01em;margin-bottom:4px">SmartJobFinder</div>
+  <div style="font-size:13px;color:#6B645A;margin-bottom:18px;text-wrap:pretty">Mobile prototype. Jump to any screen, or tap through the flow in the phone.</div>
+  <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="11">
+    <div onClick="{{ n.go }}" style="display:flex;gap:10px;align-items:baseline;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;background:{{ n.bg }};color:{{ n.fg }}" style-hover="background:#E3DBCE">
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;opacity:.6">{{ n.num }}</span><span>{{ n.label }}</span>
+    </div>
+  </sc-for>
+</div>
+</sc-if>
+
+<div style="width:390px;height:844px;border-radius:56px;background:#1E1B17;padding:11px;box-shadow:0 30px 80px -20px rgba(60,40,20,.35);flex-shrink:0">
+<div style="width:100%;height:100%;border-radius:46px;background:#F6F2EB;overflow:hidden;display:flex;flex-direction:column;position:relative">
+  <div style="height:50px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0 34px;font-size:15px;font-weight:600">
+    <span>9:41</span>
+    <div style="width:110px;height:30px;border-radius:20px;background:#1E1B17;position:absolute;left:50%;top:10px;transform:translateX(-50%)"></div>
+    <div style="display:flex;gap:5px;align-items:center"><div style="width:17px;height:10px;border-radius:2px;background:#1E1B17"></div><div style="width:24px;height:11px;border-radius:3px;border:1.5px solid #1E1B17;padding:1px"><div style="width:70%;height:100%;background:#1E1B17;border-radius:1px"></div></div></div>
+  </div>
+
+  <!-- ONBOARDING HEADER -->
+  <sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:8px 24px 0;display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <div onClick="{{ back }}" style="width:36px;height:36px;border-radius:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;visibility:{{ backVis }}">←</div>
+      <div style="flex:1;display:flex;gap:6px">
+        <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4"><div style="flex:1;height:3px;border-radius:2px;background:{{ s.bg }}"></div></sc-for>
+      </div>
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:#6B645A;width:36px;text-align:right">{{ stepLabel }}</div>
+    </div>
+  </sc-if>
+
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden">
+
+  <!-- 01 UPLOAD -->
+  <sc-if value="{{ is.upload }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:28px 24px 24px;display:flex;flex-direction:column;gap:22px">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:oklch(0.56 0.13 45);margin-bottom:10px">SMARTJOBFINDER</div>
+        <div style="font-family:'Newsreader',serif;font-size:36px;line-height:1.05;letter-spacing:-0.02em;text-wrap:pretty">Start with the resume you already have.</div>
+        <div style="font-size:15px;color:#6B645A;margin-top:12px;line-height:1.45;text-wrap:pretty">We read it once, then write a tailored version for every job we apply to on your behalf.</div>
+      </div>
+      <sc-if value="{{ up.idle }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ startUpload }}" style="border:1.5px dashed #CFC5B5;border-radius:18px;padding:34px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;background:#FFFDF9" style-hover="border-color:oklch(0.56 0.13 45)">
+          <div style="width:44px;height:52px;border-radius:6px;border:1.5px solid #1E1B17;position:relative"><div style="position:absolute;left:8px;right:8px;top:14px;height:2px;background:#1E1B17;box-shadow:0 7px 0 #1E1B17,0 14px 0 #1E1B17"></div></div>
+          <div style="font-weight:500;font-size:15px">Upload resume</div>
+          <div style="font-size:12.5px;color:#6B645A">PDF or DOCX · up to 10 MB</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <div onClick="{{ startUpload }}" style="flex:1;padding:13px;border-radius:12px;border:1px solid #E2DACD;text-align:center;font-size:14px;cursor:pointer;background:#FFFDF9">Import from LinkedIn</div>
+          <div onClick="{{ startUpload }}" style="flex:1;padding:13px;border-radius:12px;border:1px solid #E2DACD;text-align:center;font-size:14px;cursor:pointer;background:#FFFDF9">From Files</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ up.parsing }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #E2DACD;border-radius:18px;padding:20px;background:#FFFDF9;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:34px;height:40px;border-radius:5px;background:#1E1B17;color:#F6F2EB;font-family:'Geist Mono',monospace;font-size:9px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px">PDF</div>
+            <div style="flex:1"><div style="font-size:14.5px;font-weight:500">Jordan_Avery_Resume.pdf</div><div style="font-size:12.5px;color:#6B645A">Reading experience and skills…</div></div>
+            <div style="width:18px;height:18px;border-radius:50%;border:2px solid #E2DACD;border-top-color:oklch(0.56 0.13 45);animation:sjfspin .8s linear infinite"></div>
+          </div>
+          <div style="height:3px;border-radius:2px;background:#EDE7DD;overflow:hidden"><div style="width:40%;height:100%;background:oklch(0.56 0.13 45);animation:sjfbar 1.1s ease-in-out infinite"></div></div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ up.done }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #E2DACD;border-radius:18px;padding:20px;background:#FFFDF9;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:34px;height:40px;border-radius:5px;background:#1E1B17;color:#F6F2EB;font-family:'Geist Mono',monospace;font-size:9px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px">PDF</div>
+            <div style="flex:1"><div style="font-size:14.5px;font-weight:500">Jordan_Avery_Resume.pdf</div><div style="font-size:12.5px;color:oklch(0.5 0.13 150)">Parsed · 3 roles · 18 skills</div></div>
+            <div onClick="{{ resetUpload }}" style="font-size:13px;color:#6B645A;cursor:pointer;text-decoration:underline">Replace</div>
+          </div>
+        </div>
+        <div onClick="{{ goReview }}" style="padding:16px;border-radius:14px;background:#1E1B17;color:#F6F2EB;text-align:center;font-weight:500;font-size:15px;cursor:pointer">Review what we found</div>
+      </sc-if>
+      <div style="font-size:12px;color:#8A8276;line-height:1.5;text-wrap:pretty">Your resume stays private. It's only sent to employers you've matched with, as a tailored copy saved in your Applications log.</div>
+    </div>
+  </sc-if>
+
+  <!-- 02 REVIEW -->
+  <sc-if value="{{ is.review }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:20px">
+      <div>
+        <div style="font-family:'Newsreader',serif;font-size:30px;line-height:1.1;letter-spacing:-0.015em">Here's what we found.</div>
+        <div style="font-size:14px;color:#6B645A;margin-top:8px">Tap a skill to exclude it from matching.</div>
+      </div>
+      <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:4px">
+        <div style="font-family:'Newsreader',serif;font-size:22px">Jordan Avery</div>
+        <div style="font-size:14px">Product Designer</div>
+        <div style="font-size:12.5px;color:#6B645A">Ottawa, ON · jordan.avery@mail.com</div>
+        <div style="display:flex;gap:18px;margin-top:12px;padding-top:12px;border-top:1px solid #EDE7DD">
+          <div><div style="font-family:'Newsreader',serif;font-size:24px">7.2</div><div style="font-size:11.5px;color:#6B645A">years relevant</div></div>
+          <div><div style="font-family:'Newsreader',serif;font-size:24px">Expert</div><div style="font-size:11.5px;color:#6B645A">suggested level</div></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6B645A;margin-bottom:10px">EXPERIENCE</div>
+        <div style="display:flex;flex-direction:column;border-top:1px solid #E2DACD">
+          <sc-for list="{{ roles }}" as="r" hint-placeholder-count="3">
+            <div style="padding:12px 0;border-bottom:1px solid #E2DACD;display:flex;justify-content:space-between;gap:12px">
+              <div><div style="font-size:14.5px;font-weight:500">{{ r.title }}</div><div style="font-size:13px;color:#6B645A">{{ r.org }}</div></div>
+              <div style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#6B645A;white-space:nowrap">{{ r.dates }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6B645A;margin-bottom:10px">SKILLS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <sc-for list="{{ skills }}" as="k" hint-placeholder-count="10">
+            <div onClick="{{ k.toggle }}" style="padding:7px 11px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid {{ k.bd }};background:{{ k.bg }};color:{{ k.fg }};text-decoration:{{ k.td }}">{{ k.name }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <div onClick="{{ goPrefs }}" style="padding:16px;border-radius:14px;background:#1E1B17;color:#F6F2EB;text-align:center;font-weight:500;font-size:15px;cursor:pointer">Looks right — continue</div>
+    </div>
+  </sc-if>
+
+  <!-- 03 PREFS -->
+  <sc-if value="{{ is.prefs }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:24px">
+      <div>
+        <div style="font-family:'Newsreader',serif;font-size:30px;line-height:1.1;letter-spacing:-0.015em">Where and what you'll take.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:600">On-site</div><div style="font-size:12px;color:#6B645A">Cities you'd commute to</div></div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <sc-for list="{{ cityChips }}" as="c" hint-placeholder-count="1">
+              <div style="display:flex;align-items:center;gap:6px;padding:6px 6px 6px 11px;border-radius:20px;background:#1E1B17;color:#F6F2EB;font-size:13px">{{ c.name }}<span onClick="{{ c.remove }}" style="width:18px;height:18px;border-radius:9px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer">✕</span></div>
+            </sc-for>
+          </div>
+          <input value="{{ cityQ }}" onChange="{{ onCityQ }}" placeholder="Add a city…" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 4px;color:#1E1B17"></input>
+          <sc-if value="{{ hasSuggest }}" hint-placeholder-val="{{ false }}">
+            <div style="border-top:1px solid #EDE7DD;display:flex;flex-direction:column">
+              <sc-for list="{{ suggest }}" as="s" hint-placeholder-count="3">
+                <div onClick="{{ s.add }}" style="padding:10px 4px;font-size:14px;cursor:pointer;display:flex;justify-content:space-between" style-hover="color:oklch(0.56 0.13 45)"><span>{{ s.name }}</span><span style="color:#8A8276">+</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:600">Remote</div><div style="font-size:12px;color:#6B645A">Where a remote employer can be</div></div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:4px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #EDE7DD"><span style="font-size:14px;color:#6B645A">Country</span><span style="font-size:14px;font-weight:500">Canada ▾</span></div>
+          <div style="padding:12px 0;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;background:#EDE7DD;border-radius:10px;padding:3px">
+              <sc-for list="{{ scopeSeg }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="flex:1;text-align:center;padding:8px;border-radius:8px;font-size:13px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div></sc-for>
+            </div>
+            <sc-if value="{{ scopeSome }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ provChips }}" as="p" hint-placeholder-count="13"><div onClick="{{ p.toggle }}" style="width:44px;padding:7px 0;text-align:center;border-radius:8px;font-family:'Geist Mono',monospace;font-size:12px;cursor:pointer;border:1px solid {{ p.bd }};background:{{ p.bg }};color:{{ p.fg }}">{{ p.code }}</div></sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:600">Job type</div><div style="font-size:12px;color:#6B645A">Pick any</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <sc-for list="{{ typeChips }}" as="t" hint-placeholder-count="4"><div onClick="{{ t.toggle }}" style="padding:11px 12px;border-radius:12px;font-size:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border:1px solid {{ t.bd }};background:{{ t.bg }};color:{{ t.fg }}"><span>{{ t.label }}</span><span style="font-size:12px">{{ t.mark }}</span></div></sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:600">Expertise level</div><div style="font-size:12px;color:#6B645A">Pick any</div></div>
+        <div style="display:flex;background:#EDE7DD;border-radius:12px;padding:3px">
+          <sc-for list="{{ levelSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="flex:1;text-align:center;padding:10px 4px;border-radius:9px;font-size:14px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div></sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:15px;font-weight:600">Salary range</div>
+          <div style="display:flex;background:#EDE7DD;border-radius:9px;padding:2px">
+            <sc-for list="{{ salPerSeg }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div></sc-for>
+          </div>
+        </div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:4px 14px">
+          <sc-for list="{{ salRows }}" as="r" hint-placeholder-count="2">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #EDE7DD">
+              <span style="font-size:14px;color:#6B645A">{{ r.k }}</span>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div onClick="{{ r.down }}" style="width:30px;height:30px;border-radius:15px;border:1px solid #CFC5B5;display:flex;align-items:center;justify-content:center;cursor:pointer">−</div>
+                <div style="font-family:'Newsreader',serif;font-size:20px;min-width:72px;text-align:center">{{ r.v }}</div>
+                <div onClick="{{ r.up }}" style="width:30px;height:30px;border-radius:15px;border:1px solid #CFC5B5;display:flex;align-items:center;justify-content:center;cursor:pointer">+</div>
+              </div>
+            </div>
+          </sc-for>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:12px">
+            <div style="font-size:13.5px">Include postings with no salary listed</div>
+            <div onClick="{{ salUnlistedToggle }}" style="width:44px;height:26px;border-radius:13px;padding:3px;display:flex;cursor:pointer;flex-shrink:0;background:{{ salUnlisted.bg }};justify-content:{{ salUnlisted.jc }}"><div style="width:20px;height:20px;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></div></div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#6B645A">Volunteer roles are exempt from the salary filter.</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:12px 14px">
+        <div><div style="font-size:15px;font-weight:600">Years of experience</div><div style="font-size:12px;color:#6B645A;margin-top:2px">Skip postings asking for more</div></div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div onClick="{{ yearsDown }}" style="width:34px;height:34px;border-radius:17px;border:1px solid #CFC5B5;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">−</div>
+          <div style="font-family:'Newsreader',serif;font-size:26px;width:28px;text-align:center">{{ years }}</div>
+          <div onClick="{{ yearsUp }}" style="width:34px;height:34px;border-radius:17px;border:1px solid #CFC5B5;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">+</div>
+        </div>
+      </div>
+      <div onClick="{{ goSchedule }}" style="padding:16px;border-radius:14px;background:#1E1B17;color:#F6F2EB;text-align:center;font-weight:500;font-size:15px;cursor:pointer">Continue</div>
+    </div>
+  </sc-if>
+
+  <!-- 04 SCHEDULE -->
+  <sc-if value="{{ is.schedule }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:24px">
+      <div>
+        <div style="font-family:'Newsreader',serif;font-size:30px;line-height:1.1;letter-spacing:-0.015em">When should we search?</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:15px;font-weight:600">Frequency</div>
+        <div style="display:flex;background:#EDE7DD;border-radius:12px;padding:3px">
+          <sc-for list="{{ freqSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="flex:1;text-align:center;padding:10px 4px;border-radius:9px;font-size:14px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div></sc-for>
+        </div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ timeSeg }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.onClick }}" style="flex:1;text-align:center;padding:10px 0;border-radius:10px;font-family:'Geist Mono',monospace;font-size:13px;cursor:pointer;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</div></sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:15px;font-weight:600">When a match is found</div>
+        <sc-for list="{{ modeCards }}" as="m" hint-placeholder-count="2">
+          <div onClick="{{ m.onClick }}" style="display:flex;gap:12px;padding:14px;border-radius:14px;cursor:pointer;background:#FFFDF9;border:1.5px solid {{ m.bd }}">
+            <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid {{ m.bd }};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px"><div style="width:10px;height:10px;border-radius:5px;background:{{ m.dot }}"></div></div>
+            <div><div style="font-size:14.5px;font-weight:500">{{ m.title }}</div><div style="font-size:12.5px;color:#6B645A;margin-top:3px;line-height:1.4">{{ m.desc }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:4px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #EDE7DD">
+          <div><div style="font-size:14px;font-weight:500">Daily limit</div><div style="font-size:12px;color:#6B645A">Max applications per run</div></div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div onClick="{{ capDown }}" style="width:30px;height:30px;border-radius:15px;border:1px solid #CFC5B5;display:flex;align-items:center;justify-content:center;cursor:pointer">−</div>
+            <div style="font-family:'Newsreader',serif;font-size:22px;width:24px;text-align:center">{{ cap }}</div>
+            <div onClick="{{ capUp }}" style="width:30px;height:30px;border-radius:15px;border:1px solid #CFC5B5;display:flex;align-items:center;justify-content:center;cursor:pointer">+</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:12px">
+          <div><div style="font-size:14px;font-weight:500">Never re-apply</div><div style="font-size:12px;color:#6B645A;line-height:1.4">Skips postings already in your log, even if reposted on another site</div></div>
+          <div style="width:44px;height:26px;border-radius:13px;background:oklch(0.5 0.13 150);padding:3px;display:flex;justify-content:flex-end;flex-shrink:0"><div style="width:20px;height:20px;border-radius:10px;background:#fff"></div></div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#6B645A;text-align:center">First run: <span style="color:#1E1B17;font-weight:500">{{ nextRun }}</span></div>
+      <div onClick="{{ finish }}" style="padding:16px;border-radius:14px;background:oklch(0.56 0.13 45);color:#fff;text-align:center;font-weight:500;font-size:15px;cursor:pointer">Start SmartJobFinder</div>
+    </div>
+  </sc-if>
+
+  <!-- 05 MATCHES -->
+  <sc-if value="{{ is.matches }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:10px 20px 24px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:0 4px">
+        <div style="font-family:'Newsreader',serif;font-size:32px;letter-spacing:-0.02em">Matches</div>
+        <div style="font-size:12.5px;color:#6B645A;padding-bottom:6px">{{ modeShort }}</div>
+      </div>
+      <div style="background:#1E1B17;color:#F6F2EB;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;opacity:.6">{{ runLabel }}</div><div style="font-size:15px;margin-top:4px">{{ runText }}</div></div>
+          <div onClick="{{ runNow }}" style="padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.12);font-size:13px;cursor:pointer;white-space:nowrap">{{ runBtn }}</div>
+        </div>
+        <div style="display:flex;gap:0;border-top:1px solid rgba(255,255,255,.12);padding-top:12px">
+          <sc-for list="{{ runStats }}" as="s" hint-placeholder-count="3"><div style="flex:1"><div style="font-family:'Newsreader',serif;font-size:24px">{{ s.v }}</div><div style="font-size:11.5px;opacity:.6">{{ s.k }}</div></div></sc-for>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <sc-for list="{{ filterSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="padding:7px 12px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</div></sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ jobCards }}" as="j" hint-placeholder-count="4">
+          <div onClick="{{ j.open }}" style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:16px;padding:14px 16px;cursor:pointer;display:flex;flex-direction:column;gap:10px" style-hover="border-color:#CFC5B5">
+            <div style="display:flex;justify-content:space-between;gap:10px">
+              <div style="min-width:0"><div style="font-size:15px;font-weight:500">{{ j.title }}</div><div style="font-size:13px;color:#6B645A;margin-top:2px">{{ j.company }} · {{ j.loc }}</div></div>
+              <div style="text-align:right;flex-shrink:0"><div style="font-family:'Newsreader',serif;font-size:22px;line-height:1">{{ j.match }}</div><div style="font-size:10.5px;color:#6B645A">match</div></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+              <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:#6B645A;font-family:'Geist Mono',monospace">{{ j.type }} · {{ j.mode }} · {{ j.source }}</div>
+              <div style="flex-shrink:0;white-space:nowrap;padding:4px 9px;border-radius:20px;font-size:11.5px;font-weight:500;background:{{ j.sbg }};color:{{ j.sfg }}">{{ j.statusLabel }}</div>
+            </div>
+            <sc-if value="{{ j.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid #EDE7DD;padding-top:10px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:13px;line-height:1.45;text-wrap:pretty">{{ j.desc }}</div>
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px"><span style="color:#6B645A">Level</span><span>{{ j.level }}</span><span style="color:#6B645A">Experience</span><span>{{ j.yrs }} yrs</span><span style="color:#6B645A">Must have</span><span>{{ j.req }}</span></div>
+              </div>
+            </sc-if>
+            <div onClick="{{ j.toggle }}" style="font-size:12.5px;color:oklch(0.5 0.13 45);cursor:pointer;align-self:flex-start">{{ j.exLabel }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- 06 JOB DETAIL + TAILORED DOCS -->
+  <sc-if value="{{ is.job }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:6px 20px 24px;display:flex;flex-direction:column;gap:18px">
+      <div onClick="{{ backToMatches }}" style="font-size:14px;cursor:pointer;color:#6B645A">← Matches</div>
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.06em;color:#6B645A">{{ job.source }} · {{ job.posted }}</div>
+        <div style="font-family:'Newsreader',serif;font-size:28px;line-height:1.1;letter-spacing:-0.015em;margin-top:6px">{{ job.title }}</div>
+        <div style="font-size:14px;margin-top:6px">{{ job.company }}</div>
+        <div style="font-size:13px;color:#6B645A;margin-top:2px">{{ job.type }} · {{ job.loc }} · {{ job.mode }} · {{ job.salary }}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:13.5px;line-height:1.5;text-wrap:pretty">{{ job.desc }}</div>
+        <div style="font-size:12.5px;color:#6B645A">Wants {{ job.level }} · {{ job.yrs }} yrs · {{ job.req }}</div>
+      </div>
+      <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:14px;font-weight:600">Why it matched</div><div style="font-family:'Newsreader',serif;font-size:22px">{{ job.match }}</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <sc-for list="{{ job.hits }}" as="h" hint-placeholder-count="4"><div style="padding:5px 9px;border-radius:6px;background:oklch(0.95 0.03 150);color:oklch(0.4 0.1 150);font-size:12px">{{ h }}</div></sc-for>
+        </div>
+        <div style="font-size:12.5px;color:#6B645A">Asks for {{ job.yrs }} yrs · you have 7.2</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14px;font-weight:600">Tailored for this job</div>
+          <div style="display:flex;background:#EDE7DD;border-radius:9px;padding:2px">
+            <sc-for list="{{ docSeg }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div></sc-for>
+          </div>
+        </div>
+        <div style="background:#fff;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 6px 20px -8px rgba(60,40,20,.2);padding:20px 18px;font-size:10.5px;line-height:1.55;color:#2A2622">
+          <sc-if value="{{ docResume }}" hint-placeholder-val="{{ true }}">
+            <div style="font-family:'Newsreader',serif;font-size:18px">Jordan Avery</div>
+            <div style="font-size:10px;color:#6B645A;margin-bottom:10px">{{ job.headline }} · Ottawa, ON</div>
+            <div style="font-weight:600;font-size:9px;letter-spacing:.08em;margin-bottom:3px">SUMMARY</div>
+            <div style="margin-bottom:10px">Product designer with 7 years shipping B2B and public-sector tools. <span style="background:oklch(0.93 0.05 45)">{{ job.summary }}</span></div>
+            <div style="font-weight:600;font-size:9px;letter-spacing:.08em;margin-bottom:3px">EXPERIENCE</div>
+            <div style="font-weight:500">Senior Product Designer — Ledgerline, 2022–now</div>
+            <div>• <span style="background:oklch(0.93 0.05 45)">{{ job.bullet }}</span></div>
+            <div style="margin-bottom:6px">• Cut onboarding drop-off 31% with a redesigned setup flow</div>
+            <div style="font-weight:500">Product Designer — Civic Digital, 2019–22</div>
+            <div style="margin-bottom:10px">• Designed 40+ WCAG 2.1 AA services for 3 ministries</div>
+            <div style="font-weight:600;font-size:9px;letter-spacing:.08em;margin-bottom:3px">SKILLS</div>
+            <div><span style="background:oklch(0.93 0.05 45)">{{ job.skillsLine }}</span>, Prototyping, Research</div>
+          </sc-if>
+          <sc-if value="{{ docCover }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-bottom:10px">Dear {{ job.company }} hiring team,</div>
+            <div style="margin-bottom:8px">I'm applying for the {{ job.title }} role. <span style="background:oklch(0.93 0.05 45)">{{ job.coverHook }}</span></div>
+            <div style="margin-bottom:8px">At Ledgerline I lead design for a platform used by 12,000 finance teams, and before that I shipped accessible public services at Civic Digital. Both taught me to pair careful research with fast, measurable iteration.</div>
+            <div style="margin-bottom:12px">I'd welcome the chance to talk about how I could contribute.</div>
+            <div>Jordan Avery</div>
+          </sc-if>
+        </div>
+        <div style="font-size:12px;color:#6B645A;line-height:1.45"><span style="display:inline-block;width:10px;height:10px;background:oklch(0.93 0.05 45);border-radius:2px;margin-right:6px;vertical-align:-1px"></span>Rewritten to match the posting. Facts are never invented — only reordered and rephrased.</div>
+      </div>
+      <sc-if value="{{ job.isPending }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:10px">
+          <div onClick="{{ skipJob }}" style="flex:1;padding:15px;border-radius:14px;border:1px solid #CFC5B5;text-align:center;font-size:15px;cursor:pointer">Skip</div>
+          <div onClick="{{ approveJob }}" style="flex:2;padding:15px;border-radius:14px;background:oklch(0.56 0.13 45);color:#fff;text-align:center;font-weight:500;font-size:15px;cursor:pointer">Approve &amp; send</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ job.isApplied }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:15px;border-radius:14px;background:oklch(0.95 0.03 150);color:oklch(0.4 0.1 150);text-align:center;font-size:14px;font-weight:500">Applied {{ job.appliedOn }} · saved to Applications</div>
+      </sc-if>
+      <sc-if value="{{ job.isQueued }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:15px;border-radius:14px;background:#EDE7DD;text-align:center;font-size:14px">Queued — sends on next run ({{ nextRun }})</div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- 07 APPLICATIONS -->
+  <sc-if value="{{ is.apps }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:10px 20px 24px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:0 4px">
+        <div style="font-family:'Newsreader',serif;font-size:32px;letter-spacing:-0.02em">Applications</div>
+        <div style="font-size:12.5px;color:#6B645A;padding-bottom:6px">{{ appCount }} sent</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;background:#FFFDF9;border:1px solid #E2DACD;border-radius:12px;padding:10px 12px">
+        <div style="width:12px;height:12px;border-radius:6px;border:1.5px solid #8A8276"></div>
+        <input value="{{ appQ }}" onChange="{{ onAppQ }}" placeholder="Search company or role" style="flex:1;border:none;outline:none;background:transparent;font-size:14px;color:#1E1B17"></input>
+      </div>
+      <div style="font-size:12px;color:#6B645A;padding:0 4px">3 duplicate postings skipped this week</div>
+      <div style="display:flex;flex-direction:column;border-top:1px solid #E2DACD">
+        <sc-for list="{{ appRows }}" as="a" hint-placeholder-count="6">
+          <div onClick="{{ a.open }}" style="padding:13px 4px;border-bottom:1px solid #E2DACD;display:flex;gap:12px;align-items:center;cursor:pointer" style-hover="background:#EFE9DF">
+            <div style="width:44px;flex-shrink:0;font-family:'Geist Mono',monospace;font-size:11px;color:#6B645A;line-height:1.3">{{ a.dateShort }}</div>
+            <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.company }}</div><div style="font-size:12.5px;color:#6B645A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.role }}</div></div>
+            <div style="padding:4px 9px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap;background:{{ a.sbg }};color:{{ a.sfg }}">{{ a.status }}</div>
+            <div onClick="{{ a.toggle }}" style="width:28px;height:28px;border-radius:14px;border:1px solid #E2DACD;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6B645A;flex-shrink:0;cursor:pointer">{{ a.exLabel }}</div>
+          </div>
+          <sc-if value="{{ a.expanded }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:2px 4px 14px 60px;border-bottom:1px solid #E2DACD;display:flex;flex-direction:column;gap:8px">
+              <div style="font-size:13px;line-height:1.45;text-wrap:pretty">{{ a.desc }}</div>
+              <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px"><span style="color:#6B645A">Level</span><span>{{ a.level }}</span><span style="color:#6B645A">Experience</span><span>{{ a.yrs }} yrs</span><span style="color:#6B645A">Must have</span><span>{{ a.req }}</span></div>
+            </div>
+          </sc-if>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- 08 APPLICATION DETAIL -->
+  <sc-if value="{{ is.appdetail }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:6px 20px 24px;display:flex;flex-direction:column;gap:18px">
+      <div onClick="{{ backToApps }}" style="font-size:14px;cursor:pointer;color:#6B645A">← Applications</div>
+      <div>
+        <div style="font-family:'Newsreader',serif;font-size:28px;line-height:1.1;letter-spacing:-0.015em">{{ app.company }}</div>
+        <div style="font-size:14px;margin-top:6px">{{ app.role }}</div>
+      </div>
+      <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:2px 14px">
+        <sc-for list="{{ app.meta }}" as="m" hint-placeholder-count="5">
+          <div style="display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #EDE7DD;font-size:13.5px"><span style="color:#6B645A">{{ m.k }}</span><span style="text-align:right">{{ m.v }}</span></div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:14px;font-weight:600">Job summary</div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:13.5px;line-height:1.5;text-wrap:pretty">{{ app.desc }}</div>
+          <div style="display:flex;gap:0;border-top:1px solid #EDE7DD;padding-top:12px">
+            <div style="flex:1"><div style="font-family:'Newsreader',serif;font-size:20px">{{ app.level }}</div><div style="font-size:11.5px;color:#6B645A">level wanted</div></div>
+            <div style="flex:1"><div style="font-family:'Newsreader',serif;font-size:20px">{{ app.yrs }} yrs</div><div style="font-size:11.5px;color:#6B645A">experience</div></div>
+          </div>
+          <div style="font-size:12.5px"><span style="color:#6B645A">Must have · </span>{{ app.req }}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:14px;font-weight:600">Documents sent</div>
+        <sc-for list="{{ app.docs }}" as="d" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:12px;background:#FFFDF9;border:1px solid #E2DACD;border-radius:12px;padding:12px">
+            <div style="width:28px;height:34px;border-radius:4px;background:#1E1B17;color:#F6F2EB;font-family:'Geist Mono',monospace;font-size:8px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">PDF</div>
+            <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.name }}</div><div style="font-size:12px;color:#6B645A">{{ d.size }}</div></div>
+            <div style="font-size:13px;text-decoration:underline;cursor:pointer">View</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">Timeline</div>
+        <sc-for list="{{ app.timeline }}" as="t" hint-placeholder-count="3">
+          <div style="display:flex;gap:12px">
+            <div style="display:flex;flex-direction:column;align-items:center"><div style="width:9px;height:9px;border-radius:5px;background:#1E1B17;margin-top:5px"></div><div style="flex:1;width:1px;background:#CFC5B5"></div></div>
+            <div style="padding-bottom:14px"><div style="font-size:13.5px">{{ t.e }}</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#6B645A;margin-top:2px">{{ t.d }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- 10 EMAIL PREVIEW -->
+  <sc-if value="{{ is.email }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:6px 20px 24px;display:flex;flex-direction:column;gap:14px">
+      <div onClick="{{ backToSettings }}" style="font-size:14px;cursor:pointer;color:#6B645A">← Settings</div>
+      <div style="display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <div style="font-size:17px;font-weight:600;line-height:1.3">{{ mail.subject }}</div>
+        <div style="font-size:12.5px;color:#6B645A">SmartJobFinder &lt;runs@smartjobfinder.com&gt;</div>
+        <div style="font-size:12.5px;color:#6B645A">To {{ email }} · Today 7:06</div>
+      </div>
+      <div style="background:#fff;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 6px 20px -8px rgba(60,40,20,.2);padding:20px 18px;display:flex;flex-direction:column;gap:16px">
+        <div style="font-family:'Newsreader',serif;font-size:22px;line-height:1.15">Good morning, Jordan.</div>
+        <div style="font-size:13.5px;line-height:1.5;color:#2A2622">This morning's run searched 5 sources and applied to {{ mail.count }} jobs that matched your profile. A tailored resume and cover letter were sent with each.</div>
+        <div style="display:flex;border-top:1px solid #EDE7DD;border-bottom:1px solid #EDE7DD;padding:12px 0">
+          <sc-for list="{{ mail.stats }}" as="s" hint-placeholder-count="3"><div style="flex:1"><div style="font-family:'Newsreader',serif;font-size:22px">{{ s.v }}</div><div style="font-size:11px;color:#6B645A">{{ s.k }}</div></div></sc-for>
+        </div>
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;color:#6B645A">APPLIED</div>
+        <sc-for list="{{ mail.items }}" as="m" hint-placeholder-count="2">
+          <div style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px;border-bottom:1px solid #EDE7DD">
+            <div style="display:flex;justify-content:space-between;gap:10px"><div style="font-size:14px;font-weight:600">{{ m.title }}</div><div style="font-family:'Newsreader',serif;font-size:16px">{{ m.match }}</div></div>
+            <div style="font-size:12.5px;color:#6B645A">{{ m.company }} · {{ m.loc }} · {{ m.salary }}</div>
+            <div style="font-size:12.5px;line-height:1.45;color:#2A2622;margin-top:2px">{{ m.desc }}</div>
+            <div style="font-size:12px;color:#6B645A">Wants {{ m.level }} · {{ m.yrs }} yrs · via {{ m.source }}</div>
+            <div style="font-size:12.5px;color:oklch(0.5 0.13 45);text-decoration:underline;margin-top:2px">View resume &amp; cover letter sent</div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ mail.hasPending }}" hint-placeholder-val="{{ true }}">
+          <div style="background:oklch(0.96 0.03 45);border-radius:8px;padding:12px;font-size:13px;line-height:1.45">{{ mail.pendingText }}</div>
+        </sc-if>
+        <div onClick="{{ goApps }}" style="padding:13px;border-radius:10px;background:#1E1B17;color:#F6F2EB;text-align:center;font-size:14px;font-weight:500;cursor:pointer">Open Applications log</div>
+        <div style="font-size:11px;color:#8A8276;line-height:1.45">You're receiving this because email summaries are on. Change frequency or turn off in Settings.</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- 09 SETTINGS -->
+  <sc-if value="{{ is.settings }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:10px 20px 24px;display:flex;flex-direction:column;gap:20px">
+      <div style="font-family:'Newsreader',serif;font-size:32px;letter-spacing:-0.02em;padding:0 4px">Settings</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6B645A;padding:0 4px">SEARCH PROFILE</div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:2px 14px">
+          <sc-for list="{{ profileRows }}" as="r" hint-placeholder-count="4">
+            <div onClick="{{ r.go }}" style="display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #EDE7DD;cursor:pointer;font-size:14px"><span>{{ r.k }}</span><span style="color:#6B645A;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px">{{ r.v }} ›</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6B645A;padding:0 4px">EMAIL NOTIFICATIONS</div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:2px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #EDE7DD">
+            <div><div style="font-size:14px">Email me when jobs are applied to</div><div style="font-size:12px;color:#6B645A">Includes a summary of each application</div></div>
+            <div onClick="{{ emailToggle }}" style="width:44px;height:26px;border-radius:13px;padding:3px;display:flex;cursor:pointer;flex-shrink:0;background:{{ emailSw.bg }};justify-content:{{ emailSw.jc }}"><div style="width:20px;height:20px;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></div></div>
+          </div>
+          <sc-if value="{{ emailOn }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #EDE7DD">
+              <span style="font-size:14px;color:#6B645A">Send to</span>
+              <input value="{{ email }}" onChange="{{ onEmail }}" style="border:none;outline:none;background:transparent;font-size:14px;text-align:right;color:#1E1B17;min-width:0;flex:1"></input>
+            </div>
+            <div style="padding:11px 0;border-bottom:1px solid #EDE7DD;display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:14px;color:#6B645A">How often</span>
+              <div style="display:flex;background:#EDE7DD;border-radius:10px;padding:3px">
+                <sc-for list="{{ emailFreqSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="flex:1;text-align:center;padding:7px 4px;border-radius:8px;font-size:12.5px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div></sc-for>
+              </div>
+            </div>
+            <div onClick="{{ goEmail }}" style="display:flex;justify-content:space-between;padding:13px 0;cursor:pointer;font-size:14px"><span>Preview latest email</span><span style="color:#6B645A">›</span></div>
+          </sc-if>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6B645A;padding:0 4px">JOB SOURCES</div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:2px 14px">
+          <sc-for list="{{ connectorRows }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #EDE7DD">
+              <div><div style="font-size:14px">{{ c.name }}</div><div style="font-size:12px;color:{{ c.subFg }}">{{ c.sub }}</div></div>
+              <div onClick="{{ c.toggle }}" style="width:44px;height:26px;border-radius:13px;padding:3px;display:flex;cursor:pointer;flex-shrink:0;background:{{ c.bg }};justify-content:{{ c.jc }}"><div style="width:20px;height:20px;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></div></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:12px;color:#6B645A;padding:0 4px;line-height:1.45">Searches run through Apify scrapers. Applications are submitted through each site's apply flow when supported; otherwise they're flagged for you to finish.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6B645A;padding:0 4px">ACCOUNT</div>
+        <div style="background:#FFFDF9;border:1px solid #E2DACD;border-radius:14px;padding:2px 14px">
+          <div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #EDE7DD;font-size:14px"><span>Web app</span><span style="color:#6B645A">app.smartjobfinder.com</span></div>
+          <div style="display:flex;justify-content:space-between;padding:13px 0;font-size:14px"><span>Export application log</span><span style="color:#6B645A">CSV ›</span></div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  </div>
+
+  <!-- TAB BAR -->
+  <sc-if value="{{ showTabs }}" hint-placeholder-val="{{ false }}">
+    <div style="flex-shrink:0;display:flex;border-top:1px solid #E2DACD;background:#F6F2EB;padding:8px 12px 28px">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <div onClick="{{ t.onClick }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;padding:4px 0;color:{{ t.fg }}">
+          <div style="width:22px;height:3px;border-radius:2px;background:{{ t.bar }}"></div>
+          <div style="font-size:12.5px;font-weight:{{ t.fw }}">{{ t.label }}</div>
+          <sc-if value="{{ t.hasBadge }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;margin-left:56px;margin-top:2px;min-width:16px;height:16px;border-radius:8px;background:oklch(0.56 0.13 45);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 4px">{{ t.badge }}</div></sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ showHomeBar }}" hint-placeholder-val="{{ true }}">
+    <div style="height:30px;flex-shrink:0"></div>
+  </sc-if>
+  <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:#1E1B17"></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;upload&quot;,&quot;review&quot;,&quot;prefs&quot;,&quot;schedule&quot;,&quot;matches&quot;,&quot;job&quot;,&quot;apps&quot;,&quot;appdetail&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;upload&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showJumpNav&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const INK='#1E1B17', MUTED='#6B645A', ACC='oklch(0.56 0.13 45)';
+const CITIES=['Ottawa, ON','Gatineau, QC','Kanata, ON','Toronto, ON','Montréal, QC','Kingston, ON','Vancouver, BC','Calgary, AB','Halifax, NS','Waterloo, ON'];
+const PROVS=['ON','QC','BC','AB','MB','SK','NS','NB','NL','PE','YT','NT','NU'];
+const TYPES=['Regular paid','Contract','Freelance','Co-op','Internship','Volunteer'];
+const JOBS=[
+ {id:1,desc:"Own end-to-end design for Shopwell's merchant dashboard, partnering with PMs and engineers to evolve the shared design system.",level:'Expert',req:"Design systems, Figma, B2B SaaS",title:'Senior Product Designer',company:'Shopwell',loc:'Ottawa, ON',mode:'On-site',source:'LinkedIn',match:94,salary:'$118–135k',posted:'2h ago',status:'pending',yrs:'5+',hits:['Design systems','B2B SaaS','Figma','Accessibility'],headline:'Senior Product Designer',summary:'Focused on commerce tooling and scalable design systems for merchant teams.',bullet:'Led a 140-component design system adopted by 9 product squads',skillsLine:'Design systems, Commerce UX, Figma',coverHook:'Shopwell\u2019s push to unify its merchant tools maps directly to the design system work I\u2019ve led for three years.'},
+ {id:2,desc:"Design patient and clinician workflows for a virtual-care platform, from research through hand-off, with a strong accessibility bar.",level:'Intermediate',req:"User research, Accessibility, Prototyping",title:'Product Designer II',company:'Northvale Health',loc:'Remote · Canada',mode:'Remote',source:'Indeed',match:89,salary:'$98–112k',posted:'5h ago',status:'pending',yrs:'3–6',hits:['Healthcare','Research','Accessibility'],headline:'Product Designer',summary:'Experienced in regulated, accessibility-first products for clinicians and patients.',bullet:'Ran 60+ usability sessions to redesign a high-stakes approval workflow',skillsLine:'User research, WCAG 2.1, Service design',coverHook:'Designing for clinicians demands the same rigor I brought to accessible government services.'},
+ {id:3,desc:"Redesign federal benefit journeys with policy and IT teams; lead discovery, journey mapping and usability testing in both official languages.",level:'Intermediate',req:"Service design, Bilingual (EN/FR), WCAG 2.1",title:'Service Designer',company:'Gov. of Canada — ESDC',loc:'Ottawa, ON',mode:'On-site',source:'Job Bank',match:91,salary:'$95–108k',posted:'Yesterday',status:'applied',appliedOn:'Oct 30',yrs:'4+',hits:['Public sector','Service design','Bilingual'],headline:'Service Designer',summary:'Three years designing bilingual, WCAG-compliant federal services end to end.',bullet:'Mapped 14 benefit journeys and cut call-centre volume 18%',skillsLine:'Service design, Journey mapping, WCAG 2.1',coverHook:'My work on federal benefit journeys gives me direct context for ESDC\u2019s modernization goals.'},
+ {id:4,desc:"Maintain and extend Fieldnote's token-based design system, write documentation and support product teams adopting components.",level:'Expert',req:"Design tokens, Documentation, Figma",title:'Design Systems Designer',company:'Fieldnote',loc:'Remote · ON, QC',mode:'Remote',source:'Glassdoor',match:86,salary:'$105–120k',posted:'1d ago',status:'applied',appliedOn:'Oct 30',yrs:'5+',hits:['Design systems','Tokens','Docs'],headline:'Product Designer, Design Systems',summary:'Builds and documents token-based systems that engineering teams actually adopt.',bullet:'Shipped token pipeline syncing Figma to 3 codebases',skillsLine:'Design tokens, Documentation, Figma',coverHook:'I\u2019ve spent the last three years turning a scattered UI into a token-driven system — Fieldnote\u2019s exact brief.'},
+ {id:5,desc:"Lead a team of 4 designers across enterprise products, set research cadence and raise design quality across releases.",level:'Expert',req:"Design leadership, Enterprise UX, Mentoring",title:'UX Lead',company:'Kanata Systems',loc:'Kanata, ON',mode:'On-site',source:'Career page',match:82,salary:'$125–140k',posted:'1d ago',status:'queued',yrs:'7+',hits:['Leadership','Enterprise','Research'],headline:'Senior Product Designer',summary:'Mentors designers and leads research programs across enterprise products.',bullet:'Mentored 4 designers and set up the team\u2019s research cadence',skillsLine:'Design leadership, Enterprise UX, Research ops',coverHook:'I\u2019m ready to step into a lead role, and Kanata Systems\u2019 enterprise focus fits where I\u2019ve grown.'},
+ {id:7,desc:"Four-month co-op supporting UX research and prototyping for network-configuration tools used by field engineers.",level:'Junior',req:"Figma, Prototyping, Enrolled student",title:'UX Design Co-op (Winter 2027)',company:'Ciena',loc:'Ottawa, ON',mode:'On-site',source:'Company career pages',type:'Co-op',match:80,salary:'$28/hr',posted:'3h ago',status:'pending',yrs:'0–2',hits:['Prototyping','Research','Figma'],headline:'UX Designer',summary:'Hands-on prototyping and research across hardware and software teams.',bullet:'Prototyped 12 network-config flows tested with field engineers',skillsLine:'Prototyping, User research, Figma',coverHook:'A co-op term at Ciena would let me apply my research practice to complex networking tools.'},
+ {id:8,desc:"Advise staff a few hours a week on improving the online donation and volunteer sign-up experience.",level:'Junior',req:"Accessibility, Any UX background",title:'Volunteer UX Advisor',company:'Ottawa Food Bank',loc:'Remote · Canada',mode:'Remote',source:'Indeed',type:'Volunteer',match:77,salary:'Unpaid · 4 hrs/wk',posted:'1d ago',status:'queued',yrs:'Any',hits:['Non-profit','Accessibility'],headline:'Product Designer',summary:'Volunteers design time to make community services easier to reach.',bullet:'Audited a donation flow for accessibility and fixed 22 issues',skillsLine:'Accessibility, Service design, Workshops',coverHook:'I’d like to give back by making the Food Bank’s volunteer and donor journeys simpler.'},
+ {id:9,desc:"Summer internship designing civic-tech features for municipal clients, mentored by a senior designer.",level:'Junior',req:"Figma, Portfolio, Interest in public sector",title:'Product Design Intern',company:'Lumen Civic',loc:'Toronto, ON',mode:'Remote',source:'LinkedIn',type:'Internship',match:72,salary:'$24/hr',posted:'2d ago',status:'queued',yrs:'0–1',hits:['Public sector','Figma'],headline:'Product Designer',summary:'Public-sector design experience applied to civic technology.',bullet:'Designed 40+ WCAG 2.1 AA services for 3 ministries',skillsLine:'Service design, Figma, Research',coverHook:'Lumen Civic’s mission matches the public-service work I care most about.'},
+ {id:10,desc:"Six-month contract to audit and redesign a provincial licensing portal; reports to the digital services lead.",level:'Expert',req:"Service design, WCAG 2.1, Government experience",title:'UX Contractor (6 months)',company:'Ontario Digital Service',loc:'Remote · ON',mode:'Remote',source:'LinkedIn',type:'Contract',match:85,salary:'$85–95/hr',posted:'6h ago',status:'pending',yrs:'5+',hits:['Public sector','Accessibility','Service design'],headline:'Senior Product Designer',summary:'Contract-ready designer with deep public-sector and accessibility experience.',bullet:'Designed 40+ WCAG 2.1 AA services for 3 ministries',skillsLine:'Service design, WCAG 2.1, Research',coverHook:'I can start immediately and bring direct experience redesigning government services.'},
+ {id:11,desc:"Freelance project to design a mobile booking flow and component kit for a local fitness studio chain.",level:'Intermediate',req:"Mobile UX, Figma, Portfolio",title:'Freelance Product Designer',company:'Pulse Studios',loc:'Remote · Canada',mode:'Remote',source:'Indeed',type:'Freelance',match:76,salary:'$6–8k fixed',posted:'1d ago',status:'queued',yrs:'3+',hits:['Mobile UX','Figma'],headline:'Product Designer',summary:'Independent designer who ships polished mobile flows on tight timelines.',bullet:'Cut onboarding drop-off 31% with a redesigned setup flow',skillsLine:'Mobile UX, Figma, Prototyping',coverHook:'I\u2019d love to help Pulse Studios turn bookings into a two-tap experience.'},
+ {id:6,desc:"Simplify complex money-movement and reconciliation flows for business customers on a growing fintech platform.",level:'Expert',req:"Fintech UX, Data-heavy UI, Figma",title:'Senior UX Designer',company:'Maplefin',loc:'Remote · Canada',mode:'Remote',source:'Workopolis',match:79,salary:'$110–125k',posted:'2d ago',status:'queued',yrs:'5+',hits:['Fintech','Figma'],headline:'Senior Product Designer',summary:'Fintech experience simplifying complex money workflows for business users.',bullet:'Redesigned reconciliation flow used by 12,000 finance teams',skillsLine:'Fintech UX, Data-heavy UI, Figma',coverHook:'Simplifying complex money workflows is what I\u2019ve done at Ledgerline for three years.'}
+];
+const APPS=[
+ {id:'a1',desc:"Redesign federal benefit journeys with policy and IT teams; lead discovery, journey mapping and usability testing in both official languages.",level:'Intermediate',yrs:'4+',req:"Service design, Bilingual (EN/FR), WCAG 2.1",company:'Gov. of Canada — ESDC',role:'Service Designer',date:'Oct 30, 2026 · 7:04',dateShort:'OCT 30',source:'Job Bank',status:'Sent',key:'jobbank-44120871',file:'Avery_Resume_ESDC_ServiceDesigner.pdf'},
+ {id:'a2',desc:"Maintain and extend Fieldnote's token-based design system, write documentation and support product teams adopting components.",level:'Expert',yrs:'5+',req:"Design tokens, Documentation, Figma",company:'Fieldnote',role:'Design Systems Designer',date:'Oct 30, 2026 · 7:05',dateShort:'OCT 30',source:'Glassdoor',status:'Sent',key:'gd-JV_IC2296722',file:'Avery_Resume_Fieldnote_DesignSystems.pdf'},
+ {id:'a3',desc:"Design new onboarding and analytics features for a lab-automation SaaS product.",level:'Intermediate',yrs:'3–5',req:"Figma, B2B SaaS, Research",company:'Ridgeway Labs',role:'Product Designer',date:'Oct 28, 2026 · 7:02',dateShort:'OCT 28',source:'LinkedIn',status:'Viewed',key:'li-3982211045',file:'Avery_Resume_Ridgeway_ProductDesigner.pdf'},
+ {id:'a4',desc:"Lead UX for rider-facing trip planning and fare payment across web and mobile.",level:'Expert',yrs:'6+',req:"Mobile UX, Accessibility, Research",company:'Capital Transit Co.',role:'Senior UX Designer',date:'Oct 24, 2026 · 7:01',dateShort:'OCT 24',source:'Indeed',status:'Interview',key:'in-8f2a91c0e4',file:'Avery_Resume_CapitalTransit_SrUX.pdf'},
+ {id:'a5',desc:"Design learning tools for K–12 teachers, working closely with curriculum specialists.",level:'Intermediate',yrs:'3+',req:"EdTech, Prototyping, Research",company:'Brightpath Learning',role:'Product Designer',date:'Oct 21, 2026 · 7:03',dateShort:'OCT 21',source:'Workopolis',status:'Rejected',key:'wp-551203',file:'Avery_Resume_Brightpath_ProductDesigner.pdf'},
+ {id:'a6',desc:"Design clinical-research data tools used by investigators and study coordinators.",level:'Intermediate',yrs:'3+',req:"Healthcare, Data-heavy UI, Accessibility",company:'Ottawa Hospital Research',role:'UX Designer',date:'Oct 17, 2026 · 7:00',dateShort:'OCT 17',source:'Career page',status:'Viewed',key:'cp-ohri-2026-118',file:'Avery_Resume_OHRI_UX.pdf'}
+];
+const STATUS={Sent:['#EDE7DD',INK],Viewed:['oklch(0.94 0.04 80)','oklch(0.42 0.1 80)'],Interview:['oklch(0.95 0.03 150)','oklch(0.4 0.1 150)'],Rejected:['#F1ECE4','#8A8276']};
+const ROLES=[{title:'Senior Product Designer',org:'Ledgerline',dates:'2022–NOW'},{title:'Product Designer',org:'Civic Digital',dates:'2019–22'},{title:'UX Designer',org:'Northlight Studio',dates:'2017–19'}];
+const SKILLS=['Product design','Design systems','Figma','User research','Accessibility','WCAG 2.1','Prototyping','Service design','B2B SaaS','Journey mapping','Design tokens','Fintech UX','Workshop facilitation','HTML/CSS','French (B2)'];
+const ONB=['upload','review','prefs','schedule'];
+
+class Component extends DCLogic {
+  state={screen:null,salMin:90,salMax:140,salPer:'Annual',salUnlisted:true,emailOn:true,email:'jordan.avery@mail.com',emailFreq:'After each run',open:{},types:['Regular paid','Contract','Freelance','Co-op','Internship','Volunteer'],upload:'idle',cities:['Ottawa, ON','Gatineau, QC'],cityQ:'',scope:'all',provinces:['ON','QC'],levels:['Intermediate','Expert'],years:7,freq:'Weekdays',time:'07:00',mode:'auto',cap:10,conn:{LinkedIn:true,Indeed:true,Glassdoor:true,'Job Bank (Canada)':true,'Company career pages':true,Workopolis:false},jobId:1,appId:'a1',doc:'resume',filter:'all',running:false,ran:false,jobStatus:{},extraApps:[],skillOff:[],appQ:''};
+  componentWillUnmount(){clearTimeout(this.t1);clearTimeout(this.t2);}
+  scr(){return this.state.screen ?? this.props.startScreen ?? 'upload';}
+  go=(s)=>this.setState({screen:s});
+  seg(opts,cur,key,pill){return opts.map(o=>{const on=o===cur;return {label:o,bg:on?(pill?INK:'#FFFDF9'):(pill?'#FFFDF9':'transparent'),fg:on&&pill?'#F6F2EB':(on?INK:MUTED),bd:on?INK:'#E2DACD',sh:on&&!pill?'0 1px 2px rgba(0,0,0,.08)':'none',onClick:()=>this.setState({[key]:o})};});}
+  jobs(){return JOBS.map(j=>({...j,type:j.type||'Regular paid',status:this.state.jobStatus[j.id]||j.status}));}
+  nextRun(){const s=this.state;const t=s.time.replace(/^0/,'');const d=s.freq==='Weekly'?'Mon':'Tomorrow';return `${d}, ${t}`;}
+  renderVals(){
+    const s=this.state, sc=this.scr();
+    const is={}; ['upload','review','prefs','schedule','matches','job','apps','appdetail','settings','email'].forEach(k=>is[k]=sc===k);
+    const onbIdx=ONB.indexOf(sc);
+    const jobs=this.jobs();
+    const job0=jobs.find(j=>j.id===s.jobId)||jobs[0];
+    const job={...job0,match:job0.match+'%',isPending:job0.status==='pending',isApplied:job0.status==='applied',isQueued:job0.status==='queued',appliedOn:job0.appliedOn||'Oct 30'};
+    const statusMap={pending:['Needs approval','oklch(0.94 0.05 45)','oklch(0.45 0.13 45)'],applied:['Applied','oklch(0.95 0.03 150)','oklch(0.4 0.1 150)'],queued:['Queued','#EDE7DD',MUTED],skipped:['Skipped','#F1ECE4','#8A8276']};
+    const flt=s.filter;
+    const jobCards=jobs.filter(j=>s.types.includes(j.type)).filter(j=>flt==='All'||flt==='all'||(flt==='Needs approval'&&j.status==='pending')||(flt==='Applied'&&j.status==='applied')).map(j=>{const m=statusMap[j.status];const ex=!!s.open['j'+j.id];return {...j,match:j.match+'%',statusLabel:m[0],sbg:m[1],sfg:m[2],expanded:ex,exLabel:ex?'Hide summary ▴':'Summary & expertise ▾',toggle:e=>{e.stopPropagation();this.setState({open:{...s.open,['j'+j.id]:!ex}});},open:()=>this.setState({screen:'job',jobId:j.id,doc:'resume'})};});
+    const pendingCount=jobs.filter(j=>s.types.includes(j.type)&&j.status==='pending').length;
+    const allApps=[...s.extraApps,...APPS];
+    const q=s.appQ.toLowerCase();
+    const appRows=allApps.filter(a=>!q||(a.company+a.role).toLowerCase().includes(q)).map(a=>{const ex=!!s.open[a.id];return {...a,sbg:STATUS[a.status][0],sfg:STATUS[a.status][1],expanded:ex,exLabel:ex?'▴':'▾',toggle:e=>{e.stopPropagation();this.setState({open:{...s.open,[a.id]:!ex}});},open:()=>this.setState({screen:'appdetail',appId:a.id})};});
+    const a=allApps.find(x=>x.id===s.appId)||allApps[0];
+    const tl=[{e:'Tailored resume & cover letter generated',d:a.date},{e:`Submitted via ${a.source}`,d:a.date}];
+    if(a.status==='Viewed'||a.status==='Interview')tl.push({e:'Application viewed by employer',d:'2 days later'});
+    if(a.status==='Interview')tl.push({e:'Interview request received',d:'Oct 27, 2026'});
+    if(a.status==='Rejected')tl.push({e:'Position filled',d:'Oct 26, 2026'});
+    const app={...a,meta:[{k:'Applied',v:a.date},{k:'Source',v:a.source},{k:'Status',v:a.status},{k:'Duplicate key',v:a.key}],docs:[{name:a.file,size:'Resume · 2 pages · 184 KB'},{name:a.file.replace('Resume','CoverLetter'),size:'Cover letter · 1 page · 62 KB'}],timeline:tl};
+    const qq=s.cityQ.trim().toLowerCase();
+    const suggest=qq?CITIES.filter(c=>c.toLowerCase().includes(qq)&&!s.cities.includes(c)).slice(0,4).map(c=>({name:c,add:()=>this.setState({cities:[...s.cities,c],cityQ:''})})):[];
+    const tabsDef=[['matches','Matches'],['apps','Applications'],['settings','Settings']];
+    const tabActive=sc==='job'?'matches':sc==='appdetail'?'apps':sc==='email'?'settings':sc;
+    const hourly=s.salPer==='Hourly', fmt=v=>hourly?'$'+v+'/hr':'$'+v+'k', stp=hourly?5:5;
+    const sw=on=>({bg:on?'oklch(0.5 0.13 150)':'#D6CDBF',jc:on?'flex-end':'flex-start'});
+    const appliedJobs=jobs.filter(j=>j.status==='applied');
+    const pend=jobs.filter(j=>j.status==='pending'&&s.types.includes(j.type)).length;
+    const remoteText=s.scope==='all'?'Anywhere in Canada':s.provinces.join(', ')||'None';
+    const navDef=[['upload','Resume upload'],['review','Parsed resume'],['prefs','Location & level'],['schedule','Schedule & mode'],['matches','Matches feed'],['job','Tailored resume / cover'],['apps','Applications log'],['appdetail','Application detail'],['settings','Settings & sources'],['email','Email summary']];
+    return {
+      is, showNav:this.props.showJumpNav ?? true,
+      navItems:navDef.map(([k,l],i)=>({num:String(i+1).padStart(2,'0'),label:l,bg:sc===k?'#E3DBCE':'transparent',fg:sc===k?INK:MUTED,go:()=>this.setState({screen:k,upload:k==='upload'?s.upload:'done'})})),
+      isOnboarding:onbIdx>=0, backVis:onbIdx>0?'visible':'hidden', back:()=>this.go(ONB[Math.max(0,onbIdx-1)]),
+      steps:ONB.map((_,i)=>({bg:i<=onbIdx?INK:'#DDD4C6'})), stepLabel:`${onbIdx+1}/4`,
+      up:{idle:s.upload==='idle',parsing:s.upload==='parsing',done:s.upload==='done'},
+      startUpload:()=>{this.setState({upload:'parsing'});this.t1=setTimeout(()=>this.setState({upload:'done'}),1800);},
+      resetUpload:()=>this.setState({upload:'idle'}),
+      goReview:()=>this.go('review'), goPrefs:()=>this.go('prefs'), goSchedule:()=>this.go('schedule'),
+      finish:()=>this.go('matches'),
+      roles:ROLES,
+      skills:SKILLS.map(n=>{const off=s.skillOff.includes(n);return {name:n,bg:off?'transparent':'#FFFDF9',fg:off?'#A39B8F':INK,bd:off?'#E2DACD':'#CFC5B5',td:off?'line-through':'none',toggle:()=>this.setState({skillOff:off?s.skillOff.filter(x=>x!==n):[...s.skillOff,n]})};}),
+      cityChips:s.cities.map(c=>({name:c,remove:()=>this.setState({cities:s.cities.filter(x=>x!==c)})})),
+      cityQ:s.cityQ, onCityQ:e=>this.setState({cityQ:e.target.value}), suggest, hasSuggest:suggest.length>0,
+      scopeSeg:[['all','Anywhere in Canada'],['some','Specific provinces']].map(([k,l])=>{const on=s.scope===k;return {label:l,bg:on?'#FFFDF9':'transparent',fg:on?INK:MUTED,sh:on?'0 1px 2px rgba(0,0,0,.08)':'none',onClick:()=>this.setState({scope:k})};}),
+      scopeSome:s.scope==='some',
+      provChips:PROVS.map(p=>{const on=s.provinces.includes(p);return {code:p,bg:on?INK:'transparent',fg:on?'#F6F2EB':MUTED,bd:on?INK:'#E2DACD',toggle:()=>this.setState({provinces:on?s.provinces.filter(x=>x!==p):[...s.provinces,p]})};}),
+      typeChips:TYPES.map(t=>{const on=s.types.includes(t);return {label:t,mark:on?'✓':'',bg:on?INK:'#FFFDF9',fg:on?'#F6F2EB':INK,bd:on?INK:'#E2DACD',toggle:()=>this.setState({types:on?s.types.filter(x=>x!==t):[...s.types,t]})};}),
+      salPerSeg:['Annual','Hourly'].map(o=>{const on=s.salPer===o;return {label:o,bg:on?'#FFFDF9':'transparent',fg:on?INK:MUTED,sh:on?'0 1px 2px rgba(0,0,0,.08)':'none',onClick:()=>this.setState(o==='Hourly'?{salPer:o,salMin:45,salMax:70}:{salPer:o,salMin:90,salMax:140})};}),
+      salRows:[{k:'Minimum',v:fmt(s.salMin),down:()=>this.setState({salMin:Math.max(0,s.salMin-stp)}),up:()=>this.setState({salMin:Math.min(s.salMax,s.salMin+stp)})},{k:'Maximum',v:fmt(s.salMax),down:()=>this.setState({salMax:Math.max(s.salMin,s.salMax-stp)}),up:()=>this.setState({salMax:s.salMax+stp})}],
+      salUnlisted:sw(s.salUnlisted), salUnlistedToggle:()=>this.setState({salUnlisted:!s.salUnlisted}),
+      emailOn:s.emailOn, emailSw:sw(s.emailOn), emailToggle:()=>this.setState({emailOn:!s.emailOn}),
+      email:s.email, onEmail:e=>this.setState({email:e.target.value}),
+      emailFreqSeg:['After each run','Daily digest','Weekly'].map(o=>{const on=s.emailFreq===o;return {label:o,bg:on?'#FFFDF9':'transparent',fg:on?INK:MUTED,sh:on?'0 1px 2px rgba(0,0,0,.08)':'none',onClick:()=>this.setState({emailFreq:o})};}),
+      goEmail:()=>this.go('email'), backToSettings:()=>this.go('settings'), goApps:()=>this.go('apps'),
+      mail:{subject:`Applied to ${appliedJobs.length} jobs — Oct 30 run`,count:appliedJobs.length,stats:[{v:s.ran?'31':'24',k:'jobs found'},{v:String(appliedJobs.length),k:'applied'},{v:s.ran?'4':'3',k:'duplicates skipped'}],items:appliedJobs.map(j=>({...j,match:j.match+'%'})),hasPending:pend>0,pendingText:`${pend} more ${pend===1?'job is':'jobs are'} waiting for your approval in Matches.`},
+      levelSeg:['Junior','Intermediate','Expert'].map(o=>{const on=s.levels.includes(o);return {label:o,bg:on?'#FFFDF9':'transparent',fg:on?INK:MUTED,sh:on?'0 1px 2px rgba(0,0,0,.08)':'none',onClick:()=>this.setState({levels:on?s.levels.filter(x=>x!==o):[...s.levels,o]})};}),
+      years:s.years, yearsUp:()=>this.setState({years:Math.min(30,s.years+1)}), yearsDown:()=>this.setState({years:Math.max(0,s.years-1)}),
+      freqSeg:this.seg(['Daily','Weekdays','Weekly'],s.freq,'freq'),
+      timeSeg:this.seg(['07:00','12:00','18:00','22:00'],s.time,'time',true),
+      modeCards:[['auto','Apply automatically','Tailor documents and submit right away. Review everything afterwards in Applications.'],['review','Ask me first','Prepare tailored documents and wait for your approval on each job.']].map(([k,t,d])=>{const on=s.mode===k;return {title:t,desc:d,bd:on?INK:'#E2DACD',dot:on?INK:'transparent',onClick:()=>this.setState({mode:k})};}),
+      cap:s.cap, capUp:()=>this.setState({cap:Math.min(50,s.cap+1)}), capDown:()=>this.setState({cap:Math.max(1,s.cap-1)}),
+      nextRun:this.nextRun(),
+      modeShort:s.mode==='auto'?'Auto-apply on':'Approval mode',
+      runLabel:s.running?'RUNNING':s.ran?'LAST RUN · JUST NOW':'LAST RUN · TODAY 7:00',
+      runText:s.running?'Searching 5 sources…':`Next run ${this.nextRun()}`,
+      runBtn:s.running?'…':'Run now',
+      runNow:()=>{if(s.running)return;this.setState({running:true});this.t2=setTimeout(()=>this.setState({running:false,ran:true}),2200);},
+      runStats:[{v:s.ran?'31':'24',k:'found'},{v:String(jobs.filter(j=>j.status==='applied').length),k:'applied'},{v:s.ran?'4':'3',k:'duplicates skipped'}],
+      filterSeg:this.seg(['All','Needs approval','Applied'],flt==='all'?'All':flt,'filter',true),
+      jobCards, job,
+      docSeg:[['resume','Resume'],['cover','Cover letter']].map(([k,l])=>{const on=s.doc===k;return {label:l,bg:on?'#FFFDF9':'transparent',fg:on?INK:MUTED,sh:on?'0 1px 2px rgba(0,0,0,.08)':'none',onClick:()=>this.setState({doc:k})};}),
+      docResume:s.doc==='resume', docCover:s.doc==='cover',
+      backToMatches:()=>this.go('matches'), backToApps:()=>this.go('apps'),
+      approveJob:()=>{const j=job0;const id='x'+j.id;this.setState({jobStatus:{...s.jobStatus,[j.id]:'applied'},extraApps:s.extraApps.some(x=>x.id===id)?s.extraApps:[{id,desc:j.desc,level:j.level,yrs:j.yrs,req:j.req,company:j.company,role:j.title,date:'Oct 30, 2026 · 9:41',dateShort:'OCT 30',source:j.source,status:'Sent',key:j.source.toLowerCase().replace(/\W/g,'').slice(0,4)+'-'+(91000+j.id*137),file:`Avery_Resume_${j.company.replace(/\W/g,'')}.pdf`},...s.extraApps]});},
+      skipJob:()=>this.setState({jobStatus:{...s.jobStatus,[job0.id]:'skipped'},screen:'matches'}),
+      appRows, appCount:allApps.length, appQ:s.appQ, onAppQ:e=>this.setState({appQ:e.target.value}), app,
+      profileRows:[{k:'Resume',v:'Jordan_Avery_Resume.pdf',go:()=>this.go('review')},{k:'On-site',v:s.cities.join(', ')||'None',go:()=>this.go('prefs')},{k:'Remote',v:remoteText,go:()=>this.go('prefs')},{k:'Job type',v:s.types.join(', ')||'None',go:()=>this.go('prefs')},{k:'Salary',v:`${fmt(s.salMin)}–${fmt(s.salMax)}${hourly?'':' /yr'}`,go:()=>this.go('prefs')},{k:'Level',v:`${s.levels.join(', ')||'None'} · ≤${s.years} yrs`,go:()=>this.go('prefs')},{k:'Schedule',v:`${s.freq} ${s.time}`,go:()=>this.go('schedule')},{k:'Mode',v:s.mode==='auto'?'Auto-apply':'Ask first',go:()=>this.go('schedule')}],
+      connectorRows:Object.keys(s.conn).map(n=>{const on=s.conn[n];return {name:n,sub:on?'Connected · via Apify':'Off',subFg:on?'oklch(0.5 0.13 150)':'#8A8276',bg:on?'oklch(0.5 0.13 150)':'#D6CDBF',jc:on?'flex-end':'flex-start',toggle:()=>this.setState({conn:{...s.conn,[n]:!on}})};}),
+      showTabs:!(onbIdx>=0), showHomeBar:onbIdx>=0,
+      tabs:tabsDef.map(([k,l])=>{const on=tabActive===k;const badge=k==='matches'?pendingCount:0;return {label:l,fg:on?INK:'#8A8276',bar:on?ACC:'transparent',fw:on?'600':'400',hasBadge:badge>0,badge,onClick:()=>this.go(k)};})
+    };
+  }
+}
+</script>
+</body>
+</html>
