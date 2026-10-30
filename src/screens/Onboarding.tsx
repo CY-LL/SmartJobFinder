@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { CITIES, JOB_TYPES, LEVELS, PROFILE, PROVINCES } from '../data'
+import { useRef, useState } from 'react'
+import { CITIES, JOB_TYPES, LEVELS, PROVINCES } from '../data'
 import { fmtSalary, nextRun, toggleIn } from '../store'
-import { Seg, SectionHead, Stepper, Toggle, useApp } from '../ui'
+import type { Settings } from '../store'
+import { emptyProfile, levelFor, parseResume } from '../profile'
+import type { Profile, Role } from '../profile'
+import { extractText } from '../extract'
+import { Seg, SectionHead, Stepper, Toggle, useApp, useProfile } from '../ui'
 
 export const ONB = ['upload', 'review', 'prefs', 'schedule'] as const
 
@@ -25,25 +29,74 @@ function NextButton({ next, label }: { next: string; label: string }) {
   return <button className="btn" onClick={() => go(s.onboarded ? 'settings' : next)}>{s.onboarded ? 'Save' : label}</button>
 }
 
+// Seed search preferences from what the resume says.
+function prefsFrom(p: Profile): Partial<Settings> {
+  return {
+    years: Math.max(1, Math.ceil(p.years)),
+    levels: p.level === 'Expert' ? ['Intermediate', 'Expert'] : [p.level],
+    ...(p.city ? { cities: [p.city] } : {}),
+  }
+}
+
 export function Upload() {
   const { s, set, go } = useApp()
   const input = useRef<HTMLInputElement>(null)
-  const timer = useRef<number>(0)
   const [drag, setDrag] = useState(false)
+  const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
-  useEffect(() => () => clearTimeout(timer.current), [])
+  const [panel, setPanel] = useState<'none' | 'linkedin'>('none')
+  const [url, setUrl] = useState('')
+  const [fallback, setFallback] = useState(false)
 
-  const accept = (name: string) => {
-    setError('')
-    set({ upload: 'parsing', fileName: name })
-    timer.current = window.setTimeout(() => set({ upload: 'done' }), 1800)
+  const applyProfile = (profile: Profile, fileName: string) => {
+    set((prev) => ({ profile, fileName, upload: 'done', skillOff: [], email: prev.email || profile.email, ...prefsFrom(profile) }))
   }
-  const onFile = (f?: File) => {
+
+  const onFile = async (f?: File) => {
+    if (input.current) input.current.value = ''
     if (!f) return
-    if (!/\.(pdf|docx?)$/i.test(f.name)) return setError('Please choose a PDF or DOCX file.')
+    setError('')
+    if (!/\.(pdf|docx)$/i.test(f.name)) return setError(/\.doc$/i.test(f.name) ? 'Older .doc files can’t be read. Save it as .docx or PDF first.' : 'Please choose a PDF or DOCX file.')
     if (f.size > 10 * 1024 * 1024) return setError('That file is over 10 MB.')
-    accept(f.name)
+    setBusy(`Reading ${f.name}…`)
+    try {
+      const profile = parseResume(await extractText(f))
+      if (!profile.name && !profile.roles.length && !profile.skills.length) {
+        throw new Error('We couldn’t find any text in that file. If it’s a scanned image, export a text-based PDF or DOCX instead.')
+      }
+      applyProfile(profile, f.name)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong reading that file.')
+    } finally {
+      setBusy('')
+    }
   }
+
+  const importLinkedIn = async () => {
+    setError('')
+    setFallback(false)
+    if (!/linkedin\.com\/in\/[\w%-]+/i.test(url)) return setError('Paste your profile link, e.g. linkedin.com/in/your-name.')
+    setBusy('Looking up your LinkedIn profile… this can take up to a minute.')
+    try {
+      const res = await fetch('/api/linkedin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url.trim() }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.profile) {
+        setFallback(true)
+        setError(data.message ?? 'LinkedIn lookup isn’t available right now.')
+        return
+      }
+      const handle = url.match(/linkedin\.com\/in\/([\w%-]+)/i)?.[1] ?? 'profile'
+      applyProfile({ ...emptyProfile(), ...data.profile, linkedin: data.profile.linkedin || url.trim() }, `LinkedIn · ${decodeURIComponent(handle)}`)
+    } catch {
+      setFallback(true)
+      setError('LinkedIn lookup isn’t available right now.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const p = s.profile
+  const profileLink = /linkedin\.com\/in\//i.test(url) ? (url.startsWith('http') ? url : 'https://' + url.trim()) : 'https://www.linkedin.com/in/me/'
 
   return (
     <div className="screen" style={{ paddingTop: 28 }}>
@@ -52,9 +105,19 @@ export function Upload() {
         <div className="display">Start with the resume you already have.</div>
         <div className="lede">We read it once, then write a tailored version for every job we apply to on your behalf.</div>
       </div>
-      <input ref={input} type="file" accept=".pdf,.doc,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      <input ref={input} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden onChange={(e) => onFile(e.target.files?.[0])} />
 
-      {s.upload === 'idle' && (
+      {busy && (
+        <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, borderRadius: 18 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ flex: 1, fontSize: 14 }}>{busy}</div>
+            <div className="spinner" />
+          </div>
+          <div className="progress"><div /></div>
+        </div>
+      )}
+
+      {!busy && s.upload === 'idle' && (
         <>
           <button
             className={`dropzone ${drag ? 'drag' : ''}`}
@@ -69,73 +132,144 @@ export function Upload() {
             <div style={{ fontWeight: 500, fontSize: 15 }}>Upload resume</div>
             <div className="small muted">PDF or DOCX · up to 10 MB</div>
           </button>
-          {error && <div className="small" style={{ color: 'oklch(0.5 0.15 25)' }}>{error}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn soft" onClick={() => accept('LinkedIn_Profile_Jordan_Avery.pdf')}>Import from LinkedIn</button>
+            <button className="btn soft" aria-expanded={panel === 'linkedin'} onClick={() => { setPanel(panel === 'linkedin' ? 'none' : 'linkedin'); setError('') }}>Import from LinkedIn</button>
             <button className="btn soft" onClick={() => input.current?.click()}>From Files</button>
           </div>
+
+          {panel === 'linkedin' && (
+            <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Your LinkedIn profile</div>
+              <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); importLinkedIn() }}>
+                <input
+                  className="text-input"
+                  style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', background: '#fff' }}
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="linkedin.com/in/your-name"
+                  aria-label="LinkedIn profile URL"
+                  inputMode="url"
+                  autoFocus
+                />
+                <button className="btn" type="submit" style={{ width: 'auto', padding: '10px 16px', fontSize: 14, borderRadius: 10 }}>Import</button>
+              </form>
+              <div className="xs muted" style={{ lineHeight: 1.45 }}>We read your public profile once to fill in your experience and skills. Import your own profile only.</div>
+              {(fallback || !error) && (
+                <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="small" style={{ fontWeight: 500 }}>{fallback ? 'Use your LinkedIn PDF instead' : 'Or upload LinkedIn’s PDF'}</div>
+                  <ol className="small muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+                    <li><a href={profileLink} target="_blank" rel="noreferrer">Open your profile on LinkedIn</a></li>
+                    <li>Click <b>Resources</b> (or <b>More</b>) → <b>Save to PDF</b></li>
+                    <li>Upload the downloaded file here</li>
+                  </ol>
+                  <button className="btn soft" onClick={() => input.current?.click()}>Upload LinkedIn PDF</button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
-      {s.upload !== 'idle' && (
-        <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, borderRadius: 18 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div className="file-ico">{/\.docx?$/i.test(s.fileName) ? 'DOC' : 'PDF'}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="ellip" style={{ fontSize: 14.5, fontWeight: 500 }}>{s.fileName}</div>
-              {s.upload === 'parsing'
-                ? <div className="small muted">Reading experience and skills…</div>
-                : <div className="small" style={{ color: 'var(--green)' }}>Parsed · 3 roles · 18 skills</div>}
-            </div>
-            {s.upload === 'parsing'
-              ? <div className="spinner" />
-              : <button className="u muted" onClick={() => { set({ upload: 'idle' }); if (input.current) input.current.value = '' }}>Replace</button>}
-          </div>
-          {s.upload === 'parsing' && <div className="progress"><div /></div>}
-        </div>
-      )}
-      {s.upload === 'done' && <button className="btn" onClick={() => go('review')}>Review what we found</button>}
+      {error && <div className="small" role="alert" style={{ color: 'oklch(0.5 0.15 25)' }}>{error}</div>}
 
-      <div className="xs faint pretty">Your resume stays private. It's only sent to employers you've matched with, as a tailored copy saved in your Applications log.</div>
+      {!busy && s.upload === 'done' && (
+        <>
+          <div className="card" style={{ padding: 20, borderRadius: 18 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div className="file-ico">{s.fileName.startsWith('LinkedIn') ? 'IN' : /\.docx$/i.test(s.fileName) ? 'DOC' : 'PDF'}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ellip" style={{ fontSize: 14.5, fontWeight: 500 }}>{s.fileName || 'Sample profile'}</div>
+                <div className="small" style={{ color: 'var(--green)' }}>{p ? `Read · ${p.roles.length} ${p.roles.length === 1 ? 'role' : 'roles'} · ${p.skills.length} skills` : 'Sample data'}</div>
+              </div>
+              <button className="u muted" onClick={() => { set({ upload: 'idle' }); setError('') }}>Replace</button>
+            </div>
+          </div>
+          <button className="btn" onClick={() => go('review')}>Review what we found</button>
+        </>
+      )}
+
+      <div className="xs faint pretty">Your resume is read in your browser and stays private. It's only sent to employers you've matched with, as a tailored copy saved in your Applications log.</div>
     </div>
+  )
+}
+
+function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <label className="li" style={{ padding: '8px 0' }}>
+      <span className="muted" style={{ fontSize: 13, width: 72, flexShrink: 0 }}>{label}</span>
+      <input className="text-input" style={{ padding: '2px 0', textAlign: 'right' }} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    </label>
   )
 }
 
 export function Review() {
   const { s, set } = useApp()
+  const p = useProfile()
+  const [skill, setSkill] = useState('')
+  const [role, setRole] = useState<Role>({ title: '', org: '', dates: '' })
+  const edit = (patch: Partial<Profile>) => set({ profile: { ...p, ...patch } })
+  const addSkill = () => {
+    const k = skill.trim()
+    if (k && !p.skills.some((x) => x.toLowerCase() === k.toLowerCase())) edit({ skills: [...p.skills, k] })
+    setSkill('')
+  }
+
   return (
     <div className="screen">
       <div>
         <div className="h1">Here's what we found.</div>
-        <div className="muted" style={{ fontSize: 14, marginTop: 8 }}>Tap a skill to exclude it from matching.</div>
+        <div className="muted" style={{ fontSize: 14, marginTop: 8 }}>Fix anything we got wrong. Tap a skill to exclude it from matching.</div>
       </div>
-      <div className="card pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div className="serif" style={{ fontSize: 22 }}>{PROFILE.name}</div>
-        <div style={{ fontSize: 14 }}>{PROFILE.title}</div>
-        <div className="small muted">{PROFILE.city} · {PROFILE.email}</div>
-        <div style={{ display: 'flex', gap: 18, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line-2)' }}>
-          <div><div className="serif" style={{ fontSize: 24 }}>{PROFILE.years}</div><div className="muted" style={{ fontSize: 11.5 }}>years relevant</div></div>
-          <div><div className="serif" style={{ fontSize: 24 }}>{PROFILE.level}</div><div className="muted" style={{ fontSize: 11.5 }}>suggested level</div></div>
+      <div className="list">
+        <Field label="Name" value={p.name} placeholder="Your name" onChange={(v) => edit({ name: v })} />
+        <Field label="Headline" value={p.title} placeholder="e.g. Product Designer" onChange={(v) => edit({ title: v })} />
+        <Field label="Location" value={p.city} placeholder="City, Province" onChange={(v) => edit({ city: v })} />
+        <Field label="Email" value={p.email} placeholder="you@example.com" onChange={(v) => edit({ email: v })} />
+        <div className="li" style={{ padding: '10px 0' }}>
+          <div>
+            <div className="serif" style={{ fontSize: 22 }}>{p.level}</div>
+            <div className="muted" style={{ fontSize: 11.5 }}>suggested level</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <Stepper label="years of experience" width={44} value={p.years} onDown={() => { const y = Math.max(0, Math.round(p.years - 1)); edit({ years: y, level: levelFor(y) }) }} onUp={() => { const y = Math.round(p.years + 1); edit({ years: y, level: levelFor(y) }) }} />
+            <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>years relevant</div>
+          </div>
         </div>
       </div>
       <div>
         <div className="eyebrow" style={{ marginBottom: 10 }}>EXPERIENCE</div>
         <div style={{ borderTop: '1px solid var(--line)' }}>
-          {PROFILE.roles.map((r) => (
-            <div key={r.title} className="row" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', alignItems: 'flex-start' }}>
-              <div><div style={{ fontSize: 14.5, fontWeight: 500 }}>{r.title}</div><div className="muted" style={{ fontSize: 13 }}>{r.org}</div></div>
-              <div className="mono muted" style={{ fontSize: 11.5, whiteSpace: 'nowrap' }}>{r.dates}</div>
+          {p.roles.length === 0 && <div className="small muted" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>We couldn't find any roles. Add them below.</div>}
+          {p.roles.map((r, i) => (
+            <div key={i} className="row" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', alignItems: 'flex-start' }}>
+              <div style={{ minWidth: 0 }}><div style={{ fontSize: 14.5, fontWeight: 500 }}>{r.title}</div><div className="muted" style={{ fontSize: 13 }}>{r.org}</div></div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                <div className="mono muted" style={{ fontSize: 11.5, whiteSpace: 'nowrap' }}>{r.dates}</div>
+                <button className="circle-btn" aria-label={`Remove ${r.title}`} onClick={() => edit({ roles: p.roles.filter((_, k) => k !== i) })}>✕</button>
+              </div>
             </div>
           ))}
+          <form
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px auto', gap: 6, paddingTop: 10 }}
+            onSubmit={(e) => { e.preventDefault(); if (role.title.trim()) { edit({ roles: [...p.roles, role] }); setRole({ title: '', org: '', dates: '' }) } }}
+          >
+            {(['title', 'org', 'dates'] as const).map((k) => (
+              <input key={k} className="text-input" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '7px 8px', background: 'var(--card)', fontSize: 13 }} placeholder={{ title: 'Title', org: 'Company', dates: '2020–22' }[k]} aria-label={`New role ${k}`} value={role[k]} onChange={(e) => setRole({ ...role, [k]: e.target.value })} />
+            ))}
+            <button className="chip" type="submit">Add</button>
+          </form>
         </div>
       </div>
       <div>
         <div className="eyebrow" style={{ marginBottom: 10 }}>SKILLS</div>
         <div className="wrap">
-          {PROFILE.skills.map((k) => {
+          {p.skills.map((k) => {
             const off = s.skillOff.includes(k)
             return <button key={k} className={`chip skill ${off ? 'struck' : ''}`} aria-pressed={!off} onClick={() => set({ skillOff: toggleIn(s.skillOff, k) })}>{k}</button>
           })}
+          <form onSubmit={(e) => { e.preventDefault(); addSkill() }}>
+            <input className="chip" style={{ width: 120, outline: 'none' }} placeholder="+ Add skill" aria-label="Add a skill" value={skill} onChange={(e) => setSkill(e.target.value)} onBlur={addSkill} />
+          </form>
         </div>
       </div>
       <NextButton next="prefs" label="Looks right — continue" />

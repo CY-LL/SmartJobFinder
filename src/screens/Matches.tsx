@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { JOB_STATUS, PROFILE } from '../data'
+import { JOB_STATUS } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
-import { Status, useApp, useJobs } from '../ui'
+import { Status, useApp, useJobs, useProfile } from '../ui'
+import { lastName, matchedSkills } from '../profile'
 
 type Filter = 'All' | 'Needs approval' | 'Applied'
 
@@ -83,41 +84,75 @@ export function Matches() {
   )
 }
 
-export function TailoredResume({ job }: { job: Pick<Job, 'headline' | 'summary' | 'bullet' | 'skillsLine'> }) {
+type JobLike = Pick<Job, 'title' | 'req' | 'hits'>
+
+function useTailoring(job: JobLike) {
+  const { s } = useApp()
+  const p = useProfile()
+  const skills = p.skills.filter((k) => !s.skillOff.includes(k))
+  const matched = matchedSkills({ ...p, skills }, job)
+  return { p, matched, rest: skills.filter((k) => !matched.includes(k)) }
+}
+
+export function TailoredResume({ job }: { job: JobLike }) {
+  const { p, matched, rest } = useTailoring(job)
   return (
     <>
-      <div className="serif" style={{ fontSize: 18 }}>{PROFILE.name}</div>
-      <div className="muted" style={{ fontSize: '0.95em', marginBottom: 10 }}>{job.headline} · {PROFILE.city}</div>
+      <div className="serif" style={{ fontSize: 18 }}>{p.name || 'Your name'}</div>
+      <div className="muted" style={{ fontSize: '0.95em', marginBottom: 10 }}>{[p.title, p.city, p.email].filter(Boolean).join(' · ')}</div>
       <div className="sec">SUMMARY</div>
-      <div className="mb">Product designer with 7 years shipping B2B and public-sector tools. <span className="hl">{job.summary}</span></div>
+      <div className="mb">
+        {p.title || 'Professional'}{p.years > 0 && ` with ${p.years} years of experience`}.{' '}
+        {matched.length > 0 && <span className="hl">Brings {matched.slice(0, 4).join(', ')} to the {job.title} role.</span>}
+      </div>
       <div className="sec">EXPERIENCE</div>
-      <div style={{ fontWeight: 500 }}>Senior Product Designer — Ledgerline, 2022–now</div>
-      <div>• <span className="hl">{job.bullet}</span></div>
-      <div style={{ marginBottom: 6 }}>• Cut onboarding drop-off 31% with a redesigned setup flow</div>
-      <div style={{ fontWeight: 500 }}>Product Designer — Civic Digital, 2019–22</div>
-      <div className="mb">• Designed 40+ WCAG 2.1 AA services for 3 ministries</div>
+      <div className="mb">
+        {p.roles.length === 0 && <div className="muted">No roles found on your resume yet.</div>}
+        {p.roles.map((r, i) => (
+          <div key={i} style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
+        ))}
+      </div>
       <div className="sec">SKILLS</div>
-      <div><span className="hl">{job.skillsLine}</span>, Prototyping, Research</div>
+      <div>
+        {matched.length > 0 && <span className="hl">{matched.join(', ')}</span>}
+        {matched.length > 0 && rest.length > 0 && ', '}
+        {rest.slice(0, 12).join(', ')}
+      </div>
     </>
   )
 }
 
-export function CoverLetter({ company, title, hook }: { company: string; title: string; hook: string }) {
+export function CoverLetter({ job, company }: { job: JobLike; company: string }) {
+  const { p, matched } = useTailoring(job)
+  const [r1, r2] = p.roles
   return (
     <>
       <div className="mb">Dear {company} hiring team,</div>
-      <div style={{ marginBottom: 8 }}>I'm applying for the {title} role. <span className="hl">{hook}</span></div>
-      <div style={{ marginBottom: 8 }}>At Ledgerline I lead design for a platform used by 12,000 finance teams, and before that I shipped accessible public services at Civic Digital. Both taught me to pair careful research with fast, measurable iteration.</div>
+      <div style={{ marginBottom: 8 }}>
+        I'm applying for the {job.title} role.{' '}
+        <span className="hl">
+          {matched.length > 0
+            ? `My background in ${matched.slice(0, 3).join(', ')} lines up closely with what you're looking for.`
+            : `My experience${p.title ? ` as a ${p.title}` : ''} lines up with what this role calls for.`}
+        </span>
+      </div>
+      {r1 && (
+        <div style={{ marginBottom: 8 }}>
+          Most recently I've worked as {r1.title}{r1.org && ` at ${r1.org}`}
+          {r2 ? `, and before that as ${r2.title}${r2.org ? ` at ${r2.org}` : ''}` : ''}
+          {p.years > 0 ? `, for ${p.years} years of experience in total.` : '.'}
+        </div>
+      )}
       <div style={{ marginBottom: 12 }}>I'd welcome the chance to talk about how I could contribute.</div>
-      <div>{PROFILE.name}</div>
+      <div>{p.name}</div>
     </>
   )
 }
-
 export function JobDetail({ id }: { id: number }) {
   const { s, set, go, toast } = useApp()
   const jobs = useJobs()
   const [doc, setDoc] = useState<'resume' | 'cover'>('resume')
+  const profile = useProfile()
   const job = jobs.find((j) => j.id === id)
   if (!job) return <div className="screen"><button className="back" onClick={() => go('matches')}>← Matches</button><div className="empty">That job is no longer available.</div></div>
 
@@ -129,7 +164,7 @@ export function JobDetail({ id }: { id: number }) {
       id: appId, desc: job.desc, level: job.level, yrs: job.yrs, req: job.req, company: job.company, role: job.title,
       date, dateShort: now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).toUpperCase(), source: job.source, status: 'Sent',
       key: job.source.toLowerCase().replace(/\W/g, '').slice(0, 4) + '-' + (91000 + job.id * 137),
-      file: `Avery_Resume_${job.company.replace(/\W/g, '')}.pdf`,
+      file: `${lastName(profile)}_Resume_${job.company.replace(/\W/g, '')}.pdf`,
     }
     set((p) => ({
       jobStatus: { ...p.jobStatus, [job.id]: 'applied' },
@@ -141,6 +176,9 @@ export function JobDetail({ id }: { id: number }) {
     set((p) => ({ jobStatus: { ...p.jobStatus, [job.id]: 'skipped' } }))
     go('matches')
   }
+  // Show the user's own skills that the posting asks for; fall back to the posting's tags.
+  const matched = matchedSkills({ ...profile, skills: profile.skills.filter((k) => !s.skillOff.includes(k)) }, job)
+  const hits = matched.length ? matched : job.hits
   const appliedOn = job.appliedOn ?? s.extraApps.find((a) => a.id === 'x' + job.id)?.date.split(',')[0] ?? 'today'
 
   return (
@@ -158,8 +196,8 @@ export function JobDetail({ id }: { id: number }) {
       </div>
       <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="section-head"><div style={{ fontSize: 14, fontWeight: 600 }}>Why it matched</div><div className="serif" style={{ fontSize: 22 }}>{job.match}%</div></div>
-        <div className="wrap" style={{ gap: 6 }}>{job.hits.map((h) => <div key={h} className="hit">{h}</div>)}</div>
-        <div className="small muted">Asks for {job.yrs} yrs · you have {PROFILE.years}</div>
+        <div className="wrap" style={{ gap: 6 }}>{hits.map((h) => <div key={h} className="hit">{h}</div>)}</div>
+        <div className="small muted">Asks for {job.yrs} yrs · you have {profile.years}</div>
       </div>
       <div className="stack">
         <div className="row">
@@ -170,7 +208,7 @@ export function JobDetail({ id }: { id: number }) {
           </div>
         </div>
         <div className="doc">
-          {doc === 'resume' ? <TailoredResume job={job} /> : <CoverLetter company={job.company} title={job.title} hook={job.coverHook} />}
+          {doc === 'resume' ? <TailoredResume job={job} /> : <CoverLetter job={job} company={job.company} />}
         </div>
         <div className="xs muted" style={{ lineHeight: 1.45 }}>
           <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--acc-hl)', borderRadius: 2, marginRight: 6, verticalAlign: -1 }} />

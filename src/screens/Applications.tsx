@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { APPS, APP_STATUS_COLORS, JOBS } from '../data'
+import { APPS, APP_STATUS_COLORS } from '../data'
 import type { Application } from '../data'
 import { Status, useApp } from '../ui'
 import { CoverLetter, TailoredResume } from './Matches'
@@ -76,9 +76,7 @@ export function AppDetail({ id }: { id: string }) {
     { kind: 'resume' as const, name: a.file, size: 'Resume · 2 pages · 184 KB' },
     { kind: 'cover' as const, name: a.file.replace('Resume', 'CoverLetter'), size: 'Cover letter · 1 page · 62 KB' },
   ]
-  // Jobs approved in-app carry their tailored content; seeded history falls back to a generic version.
-  const job = JOBS.find((j) => j.company === a.company && j.title === a.role)
-  const tailored = job ?? { headline: a.role, summary: `Matched to ${a.company}'s ${a.role} brief: ${a.req}.`, bullet: 'Led a 140-component design system adopted by 9 product squads', skillsLine: a.req }
+  const tailoredFor = { title: a.role, req: a.req, hits: [] }
 
   return (
     <div className="screen" style={{ padding: '6px 20px 24px', gap: 18 }}>
@@ -135,8 +133,8 @@ export function AppDetail({ id }: { id: string }) {
             </div>
             <div className="doc">
               {viewing === 'resume'
-                ? <TailoredResume job={tailored} />
-                : <CoverLetter company={a.company} title={a.role} hook={job?.coverHook ?? `Your ${a.role} posting lines up closely with the work I've been doing.`} />}
+                ? <TailoredResume job={tailoredFor} />
+                : <CoverLetter job={tailoredFor} company={a.company} />}
             </div>
           </div>
         </div>

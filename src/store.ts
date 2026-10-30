@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { Application, JobStatus } from './data'
+import type { Profile } from './profile'
 
 export interface Settings {
   onboarded: boolean
   upload: 'idle' | 'parsing' | 'done'
   fileName: string
+  profile: Profile | null
   skillOff: string[]
   cities: string[]
   scope: 'all' | 'some'
@@ -33,7 +35,8 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   onboarded: false,
   upload: 'idle',
-  fileName: 'Jordan_Avery_Resume.pdf',
+  fileName: '',
+  profile: null,
   skillOff: [],
   cities: ['Ottawa, ON', 'Gatineau, QC'],
   scope: 'all',
@@ -51,7 +54,7 @@ export const DEFAULTS: Settings = {
   cap: 10,
   noReapply: true,
   emailOn: true,
-  email: 'jordan.avery@mail.com',
+  email: '',
   emailFreq: 'After each run',
   conn: { LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank (Canada)': true, 'Company career pages': true, Workopolis: false },
   jobStatus: {},

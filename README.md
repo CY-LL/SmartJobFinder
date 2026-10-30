@@ -11,9 +11,17 @@ A responsive web app (React + TypeScript + Vite) built from the Claude Design pr
 - **Applications** — searchable log, application detail with documents and timeline
 - **Settings** — search profile, email summaries (with preview), job sources, CSV export
 
+## Resume and LinkedIn import
+
+- **Upload** — PDF and DOCX resumes are read in the browser ([`src/extract.ts`](src/extract.ts)) and parsed with pattern rules ([`src/profile.ts`](src/profile.ts)) into name, contact, roles, skills and years of experience. The user corrects anything on the review screen.
+- **LinkedIn URL** — `POST /api/linkedin` ([`netlify/functions/linkedin.mts`](netlify/functions/linkedin.mts)) runs an Apify LinkedIn profile scraper. Set these in Netlify → Project configuration → Environment variables:
+  - `APIFY_TOKEN` (required) — your Apify API token
+  - `APIFY_LINKEDIN_ACTOR` (optional) — defaults to `dev_fusion~Linkedin-Profile-Scraper`
+- **LinkedIn PDF fallback** — when the lookup isn't configured or fails, the app walks the user through LinkedIn's *Save to PDF* and parses that file instead.
+
 ## Status
 
-This is a front-end build. Resume parsing, job search (Apify scrapers) and application submission are simulated with the demo data in [`src/data.ts`](src/data.ts). Settings and actions are saved in the browser's local storage.
+Job search and application submission are still simulated with the demo jobs in [`src/data.ts`](src/data.ts). Tailored resumes and cover letters are generated from the user's parsed profile. Settings and actions are saved in the browser's local storage.
 
 ## Development
 

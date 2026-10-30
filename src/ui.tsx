@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
-import { JOBS } from './data'
+import { DEMO_PROFILE, JOBS } from './data'
 import type { Job } from './data'
+import type { Profile } from './profile'
 import type { Settings, Patch } from './store'
 
 export interface Ctx {
@@ -14,6 +15,10 @@ export interface Ctx {
 
 export const AppCtx = createContext<Ctx>(null!)
 export const useApp = () => useContext(AppCtx)
+
+export function useProfile(): Profile {
+  return useApp().s.profile ?? DEMO_PROFILE
+}
 
 export function useJobs(): Job[] {
   const { s } = useApp()

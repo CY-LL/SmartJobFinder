@@ -1,4 +1,5 @@
-import { useApp, useJobs, Seg, Toggle } from '../ui'
+import { useApp, useJobs, useProfile, Seg, Toggle } from '../ui'
+import { firstName } from '../profile'
 import { fmtSalary } from '../store'
 import { useAllApps } from './Applications'
 
@@ -19,7 +20,7 @@ export function Settings() {
   const apps = useAllApps()
   const hourly = s.salPer === 'Hourly'
   const rows: [string, string, string][] = [
-    ['Resume', s.fileName, 'upload'],
+    ['Resume', s.fileName || 'Sample profile', 'upload'],
     ['On-site', s.cities.join(', ') || 'None', 'prefs'],
     ['Remote', s.scope === 'all' ? 'Anywhere in Canada' : s.provinces.join(', ') || 'None', 'prefs'],
     ['Job type', s.types.join(', ') || 'None', 'prefs'],
@@ -95,6 +96,7 @@ export function Settings() {
 
 export function EmailPreview() {
   const { s, go } = useApp()
+  const profile = useProfile()
   const jobs = useJobs()
   const applied = jobs.filter((j) => j.status === 'applied')
   const pend = jobs.filter((j) => j.status === 'pending' && s.types.includes(j.type)).length
@@ -109,7 +111,7 @@ export function EmailPreview() {
         <div className="small muted">To {s.email} · Today 7:06</div>
       </div>
       <div className="doc" style={{ borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 16, fontSize: 13.5, lineHeight: 1.5 }}>
-        <div className="serif" style={{ fontSize: 22, lineHeight: 1.15 }}>Good morning, Jordan.</div>
+        <div className="serif" style={{ fontSize: 22, lineHeight: 1.15 }}>Good morning, {firstName(profile)}.</div>
         <div>This morning's run searched {sources} sources and applied to {applied.length} jobs that matched your profile. A tailored resume and cover letter were sent with each.</div>
         <div className="stats" style={{ borderTop: '1px solid var(--line-2)', borderBottom: '1px solid var(--line-2)', padding: '12px 0' }}>
           <div><div className="v" style={{ fontSize: 22 }}>{s.ran ? 31 : 24}</div><div className="k" style={{ fontSize: 11 }}>jobs found</div></div>
