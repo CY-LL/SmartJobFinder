@@ -1,9 +1,12 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { DEMO_PROFILE, JOBS } from './data'
-import type { Job } from './data'
+import type { Job, JobStatus } from './data'
+import { emptyProfile } from './profile'
 import type { Profile } from './profile'
+import { filteredOut, scoreJob } from './match'
+import type { Scored } from './match'
 import type { Settings, Patch } from './store'
+import type { SearchState } from './search'
 
 export interface Ctx {
   s: Settings
@@ -11,19 +14,36 @@ export interface Ctx {
   go: (path: string) => void
   toast: (msg: string) => void
   reset: () => void
+  search: SearchState & { run: () => Promise<void> }
 }
 
 export const AppCtx = createContext<Ctx>(null!)
 export const useApp = () => useContext(AppCtx)
 
 export function useProfile(): Profile {
-  return useApp().s.profile ?? DEMO_PROFILE
+  return useApp().s.profile ?? emptyProfile()
 }
 
-export function useJobs(): Job[] {
+export type ScoredJob = Job & Scored & { status: JobStatus; hidden: string | null }
+
+/** All found postings with their match score and status, best matches first. */
+export function useJobs(): ScoredJob[] {
   const { s } = useApp()
-  return JOBS.map((j) => ({ ...j, status: s.jobStatus[j.id] ?? j.status }))
+  const p = useProfile()
+  return useMemo(() => {
+    const appliedTo = new Set(s.apps.map((a) => `${a.company}|${a.role}`.toLowerCase()))
+    return s.jobs
+      .map((j) => {
+        const status: JobStatus = s.jobStatus[j.id] ?? (s.noReapply && appliedTo.has(`${j.company}|${j.title}`.toLowerCase()) ? 'applied' : 'new')
+        return { ...j, ...scoreJob(j, p, s), status, hidden: s.conn[j.source] === false ? 'source' : filteredOut(j, s) }
+      })
+      .sort((a, b) => b.match - a.match)
+  }, [s, p])
 }
+
+/** Jobs worth showing: pass the user's filters and clear a minimum match. */
+export const MIN_MATCH = 30
+export const visibleJobs = (jobs: ScoredJob[]) => jobs.filter((j) => !j.hidden && (j.match >= MIN_MATCH || j.status !== 'new'))
 
 export function Seg<T extends string>({ options, value, onChange, size, labels }: {
   options: readonly T[]
@@ -44,8 +64,8 @@ export function Seg<T extends string>({ options, value, onChange, size, labels }
   )
 }
 
-export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)} />
+export function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} className={`toggle ${on ? 'on' : ''}`} style={disabled ? { opacity: 0.4, cursor: 'not-allowed' } : undefined} onClick={() => onChange(!on)} />
 }
 
 export function Stepper({ value, onDown, onUp, width = 72, large, label }: {

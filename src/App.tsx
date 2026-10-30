@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useRoute, useSettings } from './store'
-import { AppCtx, useApp, useJobs } from './ui'
+import { AppCtx, useJobs, visibleJobs } from './ui'
 import type { Ctx } from './ui'
 import { ONB, OnboardingHeader, Prefs, Review, Schedule, Upload } from './screens/Onboarding'
 import { JobDetail, Matches } from './screens/Matches'
 import { AppDetail, Applications } from './screens/Applications'
-import { EmailPreview, Settings } from './screens/Settings'
+import { Settings } from './screens/Settings'
+import { useSearch } from './search'
 
 const TABS = [['matches', 'Matches'], ['apps', 'Applications'], ['settings', 'Settings']] as const
 
 function Nav({ active }: { active: string }) {
   const jobs = useJobs()
-  const { s, go } = useApp()
-  const pending = jobs.filter((j) => j.status === 'pending' && s.types.includes(j.type)).length
+  const { go } = useContext(AppCtx)
+  const pending = visibleJobs(jobs).filter((j) => j.status === 'new').length
   const items = TABS.map(([k, label]) => ({ k, label, on: active === k, badge: k === 'matches' ? pending : 0 }))
   return (
     <>
@@ -50,11 +51,12 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToastMsg(''), 2600)
   }, [])
 
-  const ctx: Ctx = { s, set, go, toast, reset }
+  const search = useSearch(s, set)
+  const ctx: Ctx = { s, set, go, toast, reset, search }
 
   const [screen, param] = parts
   const onbIdx = ONB.indexOf(screen as (typeof ONB)[number])
-  const known = ['matches', 'job', 'apps', 'settings', 'email']
+  const known = ['matches', 'job', 'apps', 'settings']
   // Not set up yet: everything outside onboarding redirects to its first step.
   const fallback = s.onboarded ? 'matches' : 'upload'
   const valid = onbIdx >= 0 || (s.onboarded && known.includes(screen))
@@ -63,7 +65,7 @@ export default function App() {
   }, [valid, fallback])
   if (!valid) return null
 
-  const active = screen === 'job' || screen === 'email' ? (screen === 'job' ? 'matches' : 'settings') : screen
+  const active = screen === 'job' ? 'matches' : screen
 
   let body
   switch (screen) {
@@ -72,10 +74,9 @@ export default function App() {
     case 'prefs': body = <Prefs />; break
     case 'schedule': body = <Schedule />; break
     case 'matches': body = <Matches />; break
-    case 'job': body = <JobDetail id={Number(param)} />; break
+    case 'job': body = <JobDetail id={decodeURIComponent(param ?? '')} />; break
     case 'apps': body = param ? <AppDetail id={param} /> : <Applications />; break
     case 'settings': body = <Settings />; break
-    case 'email': body = <EmailPreview />; break
   }
 
   const onboarding = onbIdx >= 0

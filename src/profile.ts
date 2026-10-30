@@ -189,15 +189,3 @@ export function parseResume(text: string): Profile {
   return p
 }
 
-// ---------- Job matching helpers ----------
-
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9+#]/g, '')
-
-/** Profile skills that a job asks for (by its requirements and tags). */
-export function matchedSkills(p: Profile, job: { req: string; hits: string[] }): string[] {
-  const wanted = [...job.req.split(','), ...job.hits].map((s) => norm(s)).filter(Boolean)
-  return p.skills.filter((k) => {
-    const n = norm(k)
-    return n.length > 1 && wanted.some((w) => w.includes(n) || n.includes(w))
-  })
-}

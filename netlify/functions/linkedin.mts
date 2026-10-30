@@ -3,11 +3,11 @@
 
 // harvestapi's scraper needs no cookies and, unlike some others, doesn't ask for full Apify account access.
 const DEFAULT_ACTOR = 'harvestapi~linkedin-profile-scraper'
+import { apify, json, str } from '../lib/apify.mts'
+import type { Json } from '../lib/apify.mts'
+
 const PROFILE_URL = /^https?:\/\/([a-z]{2,3}\.)?linkedin\.com\/in\/[\w%-]+\/?(\?.*)?$/i
 
-type Json = Record<string, unknown>
-const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
-const json = (body: unknown, status = 200) => Response.json(body, { status })
 
 function year(v: unknown): string {
   if (typeof v === 'number') return String(v)
@@ -77,17 +77,6 @@ function normalize(raw: Json) {
     years,
     level: years >= 7 ? 'Expert' : years >= 3 ? 'Intermediate' : 'Junior',
   }
-}
-
-async function apify(path: string, token: string, init?: RequestInit) {
-  const res = await fetch(`https://api.apify.com/v2/${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-  })
-  if (res.ok) return { data: (await res.json()) as unknown }
-  const detail = ((await res.json().catch(() => ({}))) as { error?: { type?: string; message?: string } }).error
-  console.error('Apify error', res.status, detail?.type, detail?.message)
-  return { fail: json({ error: 'lookup_failed', message: detail?.message ? `LinkedIn lookup failed: ${detail.message}` : `The LinkedIn lookup service returned ${res.status}.` }, 502) }
 }
 
 // A lookup takes longer than a Netlify function may run, so POST starts an Apify run

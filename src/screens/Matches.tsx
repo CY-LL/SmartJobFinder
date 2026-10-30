@@ -1,60 +1,66 @@
-import { useEffect, useRef, useState } from 'react'
-import { JOB_STATUS } from '../data'
+import { useState } from 'react'
+import { JOB_STATUS, ago, fmtDate } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
-import { Status, useApp, useJobs, useProfile } from '../ui'
-import { lastName, matchedSkills } from '../profile'
+import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
+import { skillsInJob } from '../match'
 
-type Filter = 'All' | 'Needs approval' | 'Applied'
+type Filter = 'All' | 'New' | 'Applied'
 
 export function Matches() {
-  const { s, set, go } = useApp()
-  const jobs = useJobs()
-  const [filter, setFilter] = useState<Filter>('All')
-  const [open, setOpen] = useState<Record<number, boolean>>({})
-  const [running, setRunning] = useState(false)
-  const timer = useRef(0)
-  useEffect(() => () => clearTimeout(timer.current), [])
+  const { s, go, search } = useApp()
+  const all = useJobs()
+  const [filter, setFilter] = useState<Filter>('New')
+  const [open, setOpen] = useState<Record<string, boolean>>({})
 
-  const visible = jobs
-    .filter((j) => s.types.includes(j.type))
-    .filter((j) => filter === 'All' || (filter === 'Needs approval' ? j.status === 'pending' : j.status === 'applied'))
-  const applied = jobs.filter((j) => j.status === 'applied').length
-  const runNow = () => {
-    if (running) return
-    setRunning(true)
-    timer.current = window.setTimeout(() => { setRunning(false); set({ ran: true }) }, 2200)
-  }
-  const sources = Object.values(s.conn).filter(Boolean).length
+  const shown = visibleJobs(all)
+  const list = shown.filter((j) => filter === 'All' ? j.status !== 'skipped' : filter === 'New' ? j.status === 'new' : j.status === 'applied')
+  const hiddenCount = all.length - shown.length
+  const counts = { New: shown.filter((j) => j.status === 'new').length, Applied: shown.filter((j) => j.status === 'applied').length }
+  const sources = Object.entries(s.conn).filter(([, on]) => on).map(([k]) => k)
 
   return (
     <div className="screen tight">
       <div className="page-head">
         <div className="h-page">Matches</div>
-        <div className="small muted" style={{ paddingBottom: 6 }}>{s.mode === 'auto' ? 'Auto-apply on' : 'Approval mode'}</div>
+        <div className="small muted" style={{ paddingBottom: 6 }}>{sources.join(' · ') || 'No sources on'}</div>
       </div>
       <div className="dark-card">
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div>
-            <div className="mono" style={{ fontSize: 10.5, letterSpacing: '.08em', opacity: 0.6 }}>{running ? 'RUNNING' : s.ran ? 'LAST RUN · JUST NOW' : 'LAST RUN · TODAY 7:00'}</div>
-            <div style={{ fontSize: 15, marginTop: 4 }}>{running ? `Searching ${sources} sources…` : `Next run ${nextRun(s)}`}</div>
+            <div className="mono" style={{ fontSize: 10.5, letterSpacing: '.08em', opacity: 0.6 }}>
+              {search.running ? 'SEARCHING' : s.lastRun ? `LAST SEARCH · ${ago(s.lastRun.at).toUpperCase()}` : 'NO SEARCH YET'}
+            </div>
+            <div style={{ fontSize: 15, marginTop: 4 }}>{search.running ? search.progress : `Next search ${nextRun(s)}`}</div>
           </div>
-          <button className="ghost-btn" onClick={runNow} disabled={running}>{running ? '…' : 'Run now'}</button>
+          <button className="ghost-btn" onClick={() => search.run()} disabled={search.running}>{search.running ? '…' : 'Search now'}</button>
         </div>
         <div className="stats">
-          <div><div className="v">{s.ran ? 31 : 24}</div><div className="k">found</div></div>
-          <div><div className="v">{applied}</div><div className="k">applied</div></div>
-          <div><div className="v">{s.ran ? 4 : 3}</div><div className="k">duplicates skipped</div></div>
+          <div><div className="v">{s.lastRun?.found ?? 0}</div><div className="k">found</div></div>
+          <div><div className="v">{shown.length}</div><div className="k">match you</div></div>
+          <div><div className="v">{counts.Applied}</div><div className="k">applied</div></div>
         </div>
       </div>
+      {search.error && <div className="small" role="alert" style={{ color: 'oklch(0.5 0.15 25)' }}>{search.error}</div>}
+      {s.lastRun && s.lastRun.failed.length > 0 && !search.running && <div className="xs muted">Some sources didn't respond: {s.lastRun.failed.join('; ')}</div>}
+
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {(['All', 'Needs approval', 'Applied'] as const).map((f) => (
-          <button key={f} className={`chip ${filter === f ? 'on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>{f}</button>
+        {(['New', 'Applied', 'All'] as const).map((f) => (
+          <button key={f} className={`chip ${filter === f ? 'on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+            {f}{f !== 'All' && counts[f] > 0 ? ` · ${counts[f]}` : ''}
+          </button>
         ))}
       </div>
       <div className="stack">
-        {visible.length === 0 && <div className="empty">No matches here yet.</div>}
-        {visible.map((j) => {
+        {list.length === 0 && (
+          <div className="empty">
+            {search.running ? 'Looking for jobs that fit your profile…'
+              : !s.lastRun ? 'Run your first search to see real jobs that fit your profile.'
+              : filter === 'Applied' ? 'You haven’t applied to anything yet.'
+              : 'No new matches. Try widening your preferences in Settings.'}
+          </div>
+        )}
+        {list.map((j) => {
           const st = JOB_STATUS[j.status]
           const ex = !!open[j.id]
           return (
@@ -64,13 +70,13 @@ export function Matches() {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}><div className="pct">{j.match}%</div><div className="muted" style={{ fontSize: 10.5 }}>match</div></div>
               </div>
               <div className="row">
-                <div className="meta">{j.type} · {j.mode} · {j.source}</div>
+                <div className="meta">{[j.type, j.mode, j.salary, j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
                 <Status colors={st}>{st[0]}</Status>
               </div>
               {ex && (
                 <div className="expand">
-                  <div className="pretty" style={{ fontSize: 13 }}>{j.desc}</div>
-                  <div className="kv"><span>Level</span><span>{j.level}</span><span>Experience</span><span>{j.yrs} yrs</span><span>Must have</span><span>{j.req}</span></div>
+                  <div className="pretty" style={{ fontSize: 13 }}>{j.desc.slice(0, 320)}{j.desc.length > 320 ? '…' : ''}</div>
+                  <div className="kv"><span>Level</span><span>{j.level}</span><span>Experience</span><span>{j.yrs ? `${j.yrs} yrs` : 'Not stated'}</span><span>Your skills</span><span>{j.matched.join(', ') || 'None mentioned'}</span></div>
                 </div>
               )}
               <button className="link" style={{ alignSelf: 'flex-start' }} aria-expanded={ex} onClick={(e) => { e.stopPropagation(); setOpen({ ...open, [j.id]: !ex }) }}>
@@ -80,17 +86,22 @@ export function Matches() {
           )
         })}
       </div>
+      {hiddenCount > 0 && !search.running && (
+        <div className="xs muted" style={{ textAlign: 'center' }}>
+          {hiddenCount} other {hiddenCount === 1 ? 'posting was' : 'postings were'} left out by your preferences or scored under {MIN_MATCH}%. <button className="link" style={{ fontSize: 12 }} onClick={() => go('prefs')}>Adjust preferences</button>
+        </div>
+      )}
     </div>
   )
 }
 
-type JobLike = Pick<Job, 'title' | 'req' | 'hits'>
+type JobLike = Pick<Job, 'title' | 'desc' | 'tags'>
 
 function useTailoring(job: JobLike) {
   const { s } = useApp()
   const p = useProfile()
   const skills = p.skills.filter((k) => !s.skillOff.includes(k))
-  const matched = matchedSkills({ ...p, skills }, job)
+  const matched = skillsInJob(skills, job)
   return { p, matched, rest: skills.filter((k) => !matched.includes(k)) }
 }
 
@@ -107,7 +118,7 @@ export function TailoredResume({ job }: { job: JobLike }) {
       </div>
       <div className="sec">EXPERIENCE</div>
       <div className="mb">
-        {p.roles.length === 0 && <div className="muted">No roles found on your resume yet.</div>}
+        {p.roles.length === 0 && <div className="muted">No roles on your profile yet.</div>}
         {p.roles.map((r, i) => (
           <div key={i} style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
         ))}
@@ -148,56 +159,77 @@ export function CoverLetter({ job, company }: { job: JobLike; company: string })
     </>
   )
 }
-export function JobDetail({ id }: { id: number }) {
-  const { s, set, go, toast } = useApp()
+
+/** Plain-text versions of the tailored documents, for copying into an application form. */
+function docText(el: HTMLElement | null) {
+  return el?.innerText.replace(/\n{3,}/g, '\n\n').trim() ?? ''
+}
+
+export function JobDetail({ id }: { id: string }) {
+  const { set, go, toast } = useApp()
   const jobs = useJobs()
   const [doc, setDoc] = useState<'resume' | 'cover'>('resume')
-  const profile = useProfile()
+  const [docEl, setDocEl] = useState<HTMLDivElement | null>(null)
+  const [more, setMore] = useState(false)
   const job = jobs.find((j) => j.id === id)
-  if (!job) return <div className="screen"><button className="back" onClick={() => go('matches')}>← Matches</button><div className="empty">That job is no longer available.</div></div>
+  if (!job) return <div className="screen"><button className="back" onClick={() => go('matches')}>← Matches</button><div className="empty">That job is no longer in your results.</div></div>
 
-  const approve = () => {
-    const appId = 'x' + job.id
-    const now = new Date()
-    const date = now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + now.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: false })
+  const markApplied = () => {
+    const now = new Date().toISOString()
     const app: Application = {
-      id: appId, desc: job.desc, level: job.level, yrs: job.yrs, req: job.req, company: job.company, role: job.title,
-      date, dateShort: now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).toUpperCase(), source: job.source, status: 'Sent',
-      key: job.source.toLowerCase().replace(/\W/g, '').slice(0, 4) + '-' + (91000 + job.id * 137),
-      file: `${lastName(profile)}_Resume_${job.company.replace(/\W/g, '')}.pdf`,
+      id: 'a-' + job.id, jobId: job.id, company: job.company, role: job.title, date: now, source: job.source, url: job.url,
+      status: 'Applied', level: job.level, yrs: job.yrs, desc: job.desc, tags: job.tags,
+      history: [{ e: 'Tailored resume & cover letter prepared', d: now }, { e: `Applied via ${job.source}`, d: now }],
     }
     set((p) => ({
       jobStatus: { ...p.jobStatus, [job.id]: 'applied' },
-      extraApps: p.extraApps.some((x) => x.id === appId) ? p.extraApps : [app, ...p.extraApps],
+      apps: p.apps.some((x) => x.id === app.id) ? p.apps : [app, ...p.apps],
     }))
-    toast(`Sent to ${job.company} · saved to Applications`)
+    toast(`Logged in Applications`)
+  }
+  const apply = () => {
+    window.open(job.applyUrl || job.url, '_blank', 'noopener')
+    markApplied()
   }
   const skip = () => {
     set((p) => ({ jobStatus: { ...p.jobStatus, [job.id]: 'skipped' } }))
     go('matches')
   }
-  // Show the user's own skills that the posting asks for; fall back to the posting's tags.
-  const matched = matchedSkills({ ...profile, skills: profile.skills.filter((k) => !s.skillOff.includes(k)) }, job)
-  const hits = matched.length ? matched : job.hits
-  const appliedOn = job.appliedOn ?? s.extraApps.find((a) => a.id === 'x' + job.id)?.date.split(',')[0] ?? 'today'
+  const undo = () => set((p) => {
+    const { [job.id]: _undone, ...rest } = p.jobStatus
+    return { jobStatus: rest, apps: p.apps.filter((a) => a.jobId !== job.id) }
+  })
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(docText(docEl))
+      toast(doc === 'resume' ? 'Resume copied' : 'Cover letter copied')
+    } catch {
+      toast('Couldn’t copy — select the text instead')
+    }
+  }
+  const desc = more || job.desc.length <= 600 ? job.desc : job.desc.slice(0, 600) + '…'
 
   return (
     <div className="screen" style={{ padding: '6px 20px 24px', gap: 18 }}>
       <button className="back" onClick={() => go('matches')}>← Matches</button>
       <div>
-        <div className="eyebrow" style={{ letterSpacing: '.06em' }}>{job.source} · {job.posted}</div>
+        <div className="eyebrow" style={{ letterSpacing: '.06em' }}>{job.source.toUpperCase()} · {(job.posted ? fmtDate(job.posted) : '').toUpperCase()}</div>
         <div className="h1" style={{ fontSize: 28, marginTop: 6 }}>{job.title}</div>
         <div style={{ fontSize: 14, marginTop: 6 }}>{job.company}</div>
-        <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{job.type} · {job.loc} · {job.mode} · {job.salary}</div>
+        <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{[job.type, job.loc, job.mode === 'Remote' ? '' : job.mode, job.salary].filter(Boolean).join(' · ')}</div>
+        <a className="link" href={job.url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 8 }}>View original posting ↗</a>
       </div>
       <div className="stack" style={{ gap: 8 }}>
-        <div className="pretty" style={{ fontSize: 13.5 }}>{job.desc}</div>
-        <div className="small muted">Wants {job.level} · {job.yrs} yrs · {job.req}</div>
+        <div className="pretty" style={{ fontSize: 13.5, whiteSpace: 'pre-line' }}>{desc}</div>
+        {job.desc.length > 600 && <button className="link" style={{ alignSelf: 'flex-start' }} onClick={() => setMore(!more)}>{more ? 'Show less ▴' : 'Read full description ▾'}</button>}
+        <div className="small muted">Wants {job.level}{job.yrs && ` · ${job.yrs} yrs`}</div>
       </div>
       <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="section-head"><div style={{ fontSize: 14, fontWeight: 600 }}>Why it matched</div><div className="serif" style={{ fontSize: 22 }}>{job.match}%</div></div>
-        <div className="wrap" style={{ gap: 6 }}>{hits.map((h) => <div key={h} className="hit">{h}</div>)}</div>
-        <div className="small muted">Asks for {job.yrs} yrs · you have {profile.years}</div>
+        {job.matched.length > 0
+          ? <div className="wrap" style={{ gap: 6 }}>{job.matched.map((h) => <div key={h} className="hit">{h}</div>)}</div>
+          : <div className="small muted">None of your listed skills appear in this posting.</div>}
+        {job.why.map((w) => <div key={w} className="small muted">{w}</div>)}
       </div>
       <div className="stack">
         <div className="row">
@@ -207,28 +239,28 @@ export function JobDetail({ id }: { id: number }) {
             <button className={doc === 'cover' ? 'on' : ''} onClick={() => setDoc('cover')}>Cover letter</button>
           </div>
         </div>
-        <div className="doc">
+        <div className="doc" ref={setDocEl}>
           {doc === 'resume' ? <TailoredResume job={job} /> : <CoverLetter job={job} company={job.company} />}
         </div>
-        <div className="xs muted" style={{ lineHeight: 1.45 }}>
-          <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--acc-hl)', borderRadius: 2, marginRight: 6, verticalAlign: -1 }} />
-          Rewritten to match the posting. Facts are never invented — only reordered and rephrased.
+        <div className="row">
+          <div className="xs muted" style={{ lineHeight: 1.45 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--acc-hl)', borderRadius: 2, marginRight: 6, verticalAlign: -1 }} />
+            Built from your profile. Nothing is invented.
+          </div>
+          <button className="chip" style={{ flexShrink: 0 }} onClick={copy}>Copy text</button>
         </div>
       </div>
-      {job.status === 'pending' && (
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn outline" style={{ flex: 1, padding: 15 }} onClick={skip}>Skip</button>
-          <button className="btn acc" style={{ flex: 2, padding: 15 }} onClick={approve}>Approve &amp; send</button>
-        </div>
+      {job.status === 'new' && (
+        <>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn outline" style={{ flex: 1, padding: 15 }} onClick={skip}>Skip</button>
+            <button className="btn acc" style={{ flex: 2, padding: 15 }} onClick={apply}>Apply on {job.source} ↗</button>
+          </div>
+          <div className="xs muted" style={{ textAlign: 'center', marginTop: -8 }}>Opens the posting so you can submit; we log it in Applications.</div>
+        </>
       )}
-      {job.status === 'applied' && <div className="banner green">Applied {appliedOn} · <button className="u" style={{ fontSize: 14 }} onClick={() => go('apps')}>saved to Applications</button></div>}
-      {job.status === 'queued' && <div className="banner neutral">Queued — sends on next run ({nextRun(s)})</div>}
-      {job.status === 'skipped' && (
-        <div className="banner neutral">Skipped · <button className="u" style={{ fontSize: 14 }} onClick={() => set((p) => {
-          const { [job.id]: _skipped, ...rest } = p.jobStatus
-          return { jobStatus: rest }
-        })}>Undo</button></div>
-      )}
+      {job.status === 'applied' && <div className="banner green">Applied · <button className="u" style={{ fontSize: 14 }} onClick={() => go('apps')}>see Applications</button> · <button className="u" style={{ fontSize: 14 }} onClick={undo}>Undo</button></div>}
+      {job.status === 'skipped' && <div className="banner neutral">Skipped · <button className="u" style={{ fontSize: 14 }} onClick={undo}>Undo</button></div>}
     </div>
   )
 }

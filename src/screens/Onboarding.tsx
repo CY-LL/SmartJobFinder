@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { CITIES, JOB_TYPES, LEVELS, PROVINCES } from '../data'
-import { fmtSalary, nextRun, toggleIn } from '../store'
+import { fmtSalary, toggleIn } from '../store'
 import type { Settings } from '../store'
 import { emptyProfile, levelFor, parseResume } from '../profile'
 import type { Profile, Role } from '../profile'
@@ -49,7 +49,7 @@ export function Upload() {
   const [fallback, setFallback] = useState(false)
 
   const applyProfile = (profile: Profile, fileName: string) => {
-    set((prev) => ({ profile, fileName, upload: 'done', skillOff: [], email: prev.email || profile.email, ...prefsFrom(profile) }))
+    set({ profile, fileName, upload: 'done', skillOff: [], ...prefsFrom(profile) })
   }
 
   const onFile = async (f?: File) => {
@@ -292,8 +292,8 @@ export function Prefs() {
   const custom = q.trim()
   const addCity = (c: string) => { set({ cities: [...s.cities, c] }); setQ('') }
   const step = 5
-  const toAnnual = () => set({ salPer: 'Annual', salMin: 90, salMax: 140 })
-  const toHourly = () => set({ salPer: 'Hourly', salMin: 45, salMax: 70 })
+  const toAnnual = () => set({ salPer: 'Annual', salMin: 60 })
+  const toHourly = () => set({ salPer: 'Hourly', salMin: 25 })
 
   return (
     <div className="screen" style={{ gap: 24 }}>
@@ -367,18 +367,15 @@ export function Prefs() {
 
       <div className="stack">
         <div className="row">
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Salary range</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Minimum salary</div>
           <Seg size="sm" options={['Annual', 'Hourly'] as const} value={s.salPer} onChange={(v) => (v === 'Hourly' ? toHourly() : toAnnual())} />
         </div>
         <div className="card" style={{ borderRadius: 14, padding: '4px 14px' }}>
           <div className="row" style={{ padding: '10px 0', borderBottom: '1px solid var(--line-2)' }}>
-            <span className="muted" style={{ fontSize: 14 }}>Minimum</span>
-            <Stepper label="minimum salary" value={fmtSalary(s, s.salMin)} onDown={() => set({ salMin: Math.max(0, s.salMin - step) })} onUp={() => set({ salMin: Math.min(s.salMax, s.salMin + step) })} />
+            <span className="muted" style={{ fontSize: 14 }}>At least</span>
+            <Stepper label="minimum salary" value={fmtSalary(s, s.salMin)} onDown={() => set({ salMin: Math.max(0, s.salMin - step) })} onUp={() => set({ salMin: s.salMin + step })} />
           </div>
-          <div className="row" style={{ padding: '10px 0', borderBottom: '1px solid var(--line-2)' }}>
-            <span className="muted" style={{ fontSize: 14 }}>Maximum</span>
-            <Stepper label="maximum salary" value={fmtSalary(s, s.salMax)} onDown={() => set({ salMax: Math.max(s.salMin, s.salMax - step) })} onUp={() => set({ salMax: s.salMax + step })} />
-          </div>
+
           <div className="row" style={{ padding: '12px 0' }}>
             <div style={{ fontSize: 13.5 }}>Include postings with no salary listed</div>
             <Toggle label="Include postings with no salary listed" on={s.salUnlisted} onChange={(v) => set({ salUnlisted: v })} />
@@ -399,10 +396,6 @@ export function Prefs() {
 
 export function Schedule() {
   const { s, set, go } = useApp()
-  const modes = [
-    ['auto', 'Apply automatically', 'Tailor documents and submit right away. Review everything afterwards in Applications.'],
-    ['review', 'Ask me first', 'Prepare tailored documents and wait for your approval on each job.'],
-  ] as const
   return (
     <div className="screen" style={{ gap: 24 }}>
       <div className="h1">When should we search?</div>
@@ -414,30 +407,18 @@ export function Schedule() {
             <button key={t} className={`time-opt ${s.time === t ? 'on' : ''}`} aria-pressed={s.time === t} onClick={() => set({ time: t })}>{t}</button>
           ))}
         </div>
-      </div>
-      <div className="stack">
-        <div style={{ fontSize: 15, fontWeight: 600 }}>When a match is found</div>
-        {modes.map(([k, t, d]) => (
-          <button key={k} className={`radio-card ${s.mode === k ? 'on' : ''}`} role="radio" aria-checked={s.mode === k} onClick={() => set({ mode: k })}>
-            <div className="dot" />
-            <div><div style={{ fontSize: 14.5, fontWeight: 500 }}>{t}</div><div className="small muted" style={{ marginTop: 3, lineHeight: 1.4 }}>{d}</div></div>
-          </button>
-        ))}
+        <div className="xs muted" style={{ lineHeight: 1.45 }}>A search runs when you open SmartJobFinder and one is due. You can also search any time from Matches.</div>
       </div>
       <div className="card" style={{ borderRadius: 14, padding: '4px 14px' }}>
-        <div className="row" style={{ padding: '12px 0', borderBottom: '1px solid var(--line-2)' }}>
-          <div><div style={{ fontSize: 14, fontWeight: 500 }}>Daily limit</div><div className="xs muted">Max applications per run</div></div>
-          <Stepper label="daily limit" width={24} value={s.cap} onDown={() => set({ cap: Math.max(1, s.cap - 1) })} onUp={() => set({ cap: Math.min(50, s.cap + 1) })} />
-        </div>
         <div className="row" style={{ padding: '12px 0' }}>
-          <div><div style={{ fontSize: 14, fontWeight: 500 }}>Never re-apply</div><div className="xs muted" style={{ lineHeight: 1.4 }}>Skips postings already in your log, even if reposted on another site</div></div>
+          <div><div style={{ fontSize: 14, fontWeight: 500 }}>Never re-apply</div><div className="xs muted" style={{ lineHeight: 1.4 }}>Marks postings already in your Applications log, even if reposted on another site</div></div>
           <Toggle label="Never re-apply" on={s.noReapply} onChange={(v) => set({ noReapply: v })} />
         </div>
       </div>
-      <div className="muted" style={{ fontSize: 13, textAlign: 'center' }}>First run: <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{nextRun(s)}</span></div>
+      <div className="xs muted" style={{ lineHeight: 1.45 }}>For each match we prepare a tailored resume and cover letter from your profile. You submit on the employer's site, and we log it in Applications.</div>
       {s.onboarded
         ? <button className="btn" onClick={() => go('settings')}>Save</button>
-        : <button className="btn acc" onClick={() => { set({ onboarded: true }); go('matches') }}>Start SmartJobFinder</button>}
+        : <button className="btn acc" onClick={() => { set({ onboarded: true, lastRun: null }); go('matches') }}>Find my first matches</button>}
     </div>
   )
 }
