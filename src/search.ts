@@ -29,7 +29,7 @@ export function useSearch(s: Settings, set: (p: Patch) => void) {
       // The Apify account runs only a few scrapers at once, so the server starts what fits and hands back
       // the rest as `queued`; those are started here as earlier runs finish.
       const start = async (tasks?: unknown[]) => {
-        const res = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ searches, sources, tasks }) })
+        const res = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ searches, sources, tasks, days: s.postedWithin ?? 7 }) })
         const data = await res.json().catch(() => ({}))
         if (!res.ok || !data.runs) throw new Error(data.message ?? 'Job search isn’t available right now.')
         return data as { runs: { id: string; source: string }[]; queued: unknown[]; failed: string[]; total: number }

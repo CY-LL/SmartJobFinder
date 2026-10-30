@@ -9,47 +9,51 @@ import { checkRun, json, notConfigured, startRun, str } from '../lib/apify.mts'
 import { htmlToText } from '../lib/fetchdoc.mts'
 import type { Json } from '../lib/apify.mts'
 
+// Each search has a kind, and each site only runs the kinds it handles well:
+//   title     the user's job titles ("Graphic Designer")       → every site
+//   skill     roles from their skills ("Motion Designer")      → Indeed
+//   combined  all titles and roles in one OR query             → LinkedIn (it understands OR)
+//   volunteer volunteer versions of their main title           → Indeed, Google Jobs
 const SOURCES = {
   Indeed: {
     actor: () => Netlify.env.get('APIFY_INDEED_ACTOR') || 'valig~indeed-jobs-scraper',
     // Indeed treats "Remote" as a location.
-    input: (s: Search) => ({ country: 'ca', title: s.keywords, location: s.remote ? 'Remote' : s.location, limit: 50, datePosted: '14' }),
+    input: (s: Search) => (s.kind === 'combined' ? null : { country: 'ca', title: s.keywords, location: s.remote ? 'Remote' : s.location, limit: 50, datePosted: String(Math.min(14, s.days)) }),
     normalize: (j: Json) => fromIndeed(j),
   },
   LinkedIn: {
     actor: () => Netlify.env.get('APIFY_LINKEDIN_JOBS_ACTOR') || 'curious_coder~linkedin-jobs-scraper',
-    input: (s: Search) => ({ keywords: s.remote ? `${s.keywords} remote` : s.keywords, location: s.remote ? 'Canada' : s.location, datePosted: 'pastWeek', limitPerSource: 25, scrapeCompany: false }),
+    input: (s: Search) => (s.kind !== 'combined' ? null : { keywords: s.remote ? `${s.keywords} remote` : s.keywords, location: s.remote ? 'Canada' : s.location, datePosted: s.days <= 1 ? 'past24Hours' : s.days <= 7 ? 'pastWeek' : 'pastMonth', limitPerSource: 50, scrapeCompany: false }),
     normalize: (j: Json) => fromLinkedIn(j),
   },
   Glassdoor: {
     actor: () => Netlify.env.get('APIFY_GLASSDOOR_ACTOR') || 'valig~glassdoor-jobs-scraper',
     // Glassdoor only matches places spelled out in full: "Ottawa, Ontario, Canada", not "Ottawa, ON".
-    input: (s: Search) => ({ keywords: s.keywords, location: s.remote ? 'Canada' : fullPlace(s.location), remoteWorkType: s.remote, daysOld: 14, limit: 30 }),
+    input: (s: Search) => (s.kind !== 'title' ? null : { keywords: s.keywords, location: s.remote ? 'Canada' : fullPlace(s.location), remoteWorkType: s.remote, daysOld: s.days, limit: 30 }),
     normalize: (j: Json) => fromGlassdoor(j),
   },
   'Job Bank': {
     actor: () => Netlify.env.get('APIFY_JOBBANK_ACTOR') || 'getascraper~jobbank-scraper',
     // Job Bank is searched by city; a Canada-wide "remote" search would mostly return unrelated postings.
-    input: (s: Search) => (s.remote ? null : { searchKeyword: s.keywords, location: s.location.split(',')[0].trim(), datePosted: 'any', maxItems: 30 }),
+    input: (s: Search) => (s.remote || s.kind !== 'title' ? null : { searchKeyword: s.keywords, location: s.location.split(',')[0].trim(), datePosted: s.days <= 2 ? '48_hours' : '30_days', maxItems: 30 }),
     normalize: (j: Json) => fromJobBank(j),
   },
   Workopolis: {
     actor: () => Netlify.env.get('APIFY_WORKOPOLIS_ACTOR') || 'shahidirfan~Workopolis-Job-Scraper',
-    input: (s: Search) => ({ keyword: s.remote ? `${s.keywords} remote` : s.keywords, location: s.remote ? 'Canada' : s.location, posted_date: '30d', results_wanted: 30, max_pages: 2 }),
+    input: (s: Search) => (s.kind !== 'title' ? null : { keyword: s.remote ? `${s.keywords} remote` : s.keywords, location: s.remote ? 'Canada' : s.location, posted_date: s.days <= 1 ? '24h' : s.days <= 7 ? '7d' : '30d', results_wanted: 30, max_pages: 2 }),
     normalize: (j: Json) => fromWorkopolis(j),
   },
-  // Google's job search also lists postings from company career pages. It costs far more per job than
-  // the other sources, so it only runs the first local search.
+  // Google's job search also lists postings from company career pages and charity boards. It costs far
+  // more per job than the other sources, so it only runs the first local title search and a volunteer search.
   'Google Jobs': {
     actor: () => Netlify.env.get('APIFY_GOOGLE_JOBS_ACTOR') || 'orgupdate~google-jobs-scraper',
-    input: (s: Search, first: boolean) => (s.remote || !first ? null : { countryName: 'canada', locationName: fullPlace(s.location).replace(/, Canada$/, ''), targetLocations: [s.location.split(',')[0].trim()], includeKeyword: s.keywords, pagesToFetch: 1, datePosted: 'week' }),
+    input: (s: Search, first: boolean) => (s.remote || !((s.kind === 'title' && first) || s.kind === 'volunteer') ? null : { countryName: 'canada', locationName: fullPlace(s.location).replace(/, Canada$/, ''), targetLocations: [s.location.split(',')[0].trim()], includeKeyword: s.keywords, pagesToFetch: 1, datePosted: s.days <= 1 ? 'today' : s.days <= 3 ? '3days' : s.days <= 7 ? 'week' : 'month' }),
     normalize: (j: Json) => fromGoogle(j),
   },
 } as const
 type Source = keyof typeof SOURCES
-interface Search { keywords: string; location: string; remote: boolean }
+interface Search { keywords: string; location: string; remote: boolean; kind: 'title' | 'skill' | 'combined' | 'volunteer'; days: number }
 interface Task { source: Source; search: number }
-
 export interface FoundJob {
   id: string
   title: string
@@ -243,6 +247,13 @@ function finish(base: { id: string; title: string; company: string; city: string
   }
 }
 
+/** Short stable id for a string (FNV-1a), for sources without their own job ids. */
+function fingerprint(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36) + s.length.toString(36)
+}
+
 const num = (v: unknown) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : null)
 const unitOf = (v: unknown): 'year' | 'hour' | null => (/hour/i.test(str(v)) ? 'hour' : /year|annual|month/i.test(str(v)) ? 'year' : null)
 
@@ -299,7 +310,7 @@ function fromWorkopolis(j: Json): FoundJob | null {
   const location = str(j.location)
   const pay = parseLinkedInSalary(str(j.salary))
   return finish({
-    id: 'wo-' + (str(j.jobKey) || str(j.url)).slice(-40),
+    id: 'wo-' + (str(j.jobKey) || fingerprint(str(j.url))),
     title,
     company: str(j.company),
     city: location.split(',')[0].trim(),
@@ -323,7 +334,8 @@ function fromGoogle(j: Json): FoundJob | null {
   const pay = salary && salary !== 'N/A' ? parseLinkedInSalary(salary) : { salMin: null, salMax: null, salUnit: null }
   const url = str(j.URL)
   return finish({
-    id: 'gj-' + url.replace(/[^a-z0-9]/gi, '').slice(-40),
+    // Google's links share long tracking suffixes, so fingerprint the whole link plus the title.
+    id: 'gj-' + fingerprint(`${url}|${title}|${str(j.company_name)}`),
     title,
     company: str(j.company_name),
     city: location.split(',')[0].trim(),
@@ -374,19 +386,29 @@ export default async (req: Request) => {
   }
 
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
-  let body: { searches?: Search[]; sources?: string[]; tasks?: Task[] } = {}
+  let body: { searches?: Partial<Search>[]; sources?: string[]; tasks?: Task[]; days?: number } = {}
   try {
     body = await req.json()
   } catch {
     return json({ error: 'bad_request', message: 'Send JSON with "searches" and "sources".' }, 400)
   }
-  const searches = (body.searches ?? []).filter((s) => str(s.keywords)).slice(0, 6)
+  const days = Math.max(1, Math.min(30, Number(body.days) || 7))
+  // Older app versions send searches without a kind: treat those as title searches.
+  const searches: Search[] = (body.searches ?? []).filter((s) => str(s.keywords)).slice(0, 20)
+    .map((s) => ({ keywords: str(s.keywords), location: str(s.location), remote: !!s.remote, kind: s.kind ?? 'title', days }))
   const sources = (body.sources ?? []).filter((s): s is Source => s in SOURCES)
+  if (searches.length && !searches.some((s) => s.kind === 'combined')) {
+    const titles = [...new Set(searches.filter((s) => s.kind === 'title').map((s) => s.keywords))]
+    for (const remote of [false, true]) {
+      const at = searches.find((s) => s.remote === remote)
+      if (at) searches.push({ ...at, kind: 'combined', keywords: titles.map((x) => `\"${x}\"`).join(' OR ') })
+    }
+  }
   if (!searches.length) return json({ error: 'bad_request', message: 'Add a job title to your profile so we know what to search for.' }, 400)
   if (!sources.length) return json({ error: 'no_sources', message: 'Turn on at least one source in Settings → Job sources.' }, 400)
 
   // Every (source, search) pair to run. The browser sends back the ones that didn't fit yet as `tasks`.
-  const firstLocal = searches.indexOf(searches.find((s) => !s.remote) ?? searches[0])
+  const firstLocal = searches.indexOf(searches.find((s) => !s.remote && s.kind === 'title') ?? searches[0])
   const all: Task[] = sources.flatMap((source) => searches.map((_, i) => ({ source, search: i })))
     .filter((t) => SOURCES[t.source].input(searches[t.search], t.search === firstLocal) !== null)
   const todo = body.tasks?.filter((t) => t.source in SOURCES && searches[t.search]) ?? all

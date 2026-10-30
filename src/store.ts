@@ -10,6 +10,10 @@ export interface Settings {
   skillOff: string[]
   /** Job titles to search for; empty means suggested from the profile. */
   searchTitles: string[]
+  /** Skill-based roles to search for (e.g. Motion Designer); empty means suggested from the profile. */
+  searchSkills: string[]
+  /** Only show postings from the last N days. */
+  postedWithin: number
   cities: string[]
   scope: 'all' | 'some'
   provinces: string[]
@@ -40,6 +44,8 @@ export const DEFAULTS: Settings = {
   profile: null,
   skillOff: [],
   searchTitles: [],
+  searchSkills: [],
+  postedWithin: 7,
   cities: [],
   scope: 'all',
   provinces: ['ON', 'QC'],

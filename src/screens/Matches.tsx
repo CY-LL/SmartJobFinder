@@ -3,7 +3,7 @@ import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
-import { endYearOf, hiddenReason, tailor } from '../match'
+import { endYearOf, hiddenReason, isPublicSector, suggestedTitles, tailor } from '../match'
 import type { Tailored, TailoredEducation } from '../match'
 import { DocBox, printDoc, sanitize } from './DocBox'
 
@@ -15,11 +15,16 @@ export function Matches() {
   const [filter, setFilter] = useState<Filter>('New')
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [showHidden, setShowHidden] = useState(false)
+  const [kind, setKind] = useState<'any' | 'gov' | 'volunteer'>('any')
 
   const shown = visibleJobs(all)
   const visible = new Set(shown.map((j) => j.id))
   // "Show hidden" lists every posting from the last search, each hidden one labelled with why.
-  const pool = showHidden ? all : shown
+  const isKind = (j: (typeof all)[number]) => kind === 'any' || (kind === 'gov' ? isPublicSector(j.company) : j.type === 'Volunteer')
+  const base = showHidden ? all : shown
+  const pool = base.filter(isKind)
+  const govCount = base.filter((j) => isPublicSector(j.company)).length
+  const volCount = base.filter((j) => j.type === 'Volunteer').length
   const list = pool.filter((j) => filter === 'All' ? j.status !== 'skipped' : filter === 'New' ? j.status === 'new' : j.status === 'applied')
   const hiddenCount = all.length - shown.length
   const counts = { New: pool.filter((j) => j.status === 'new').length, Applied: pool.filter((j) => j.status === 'applied').length }
@@ -56,6 +61,8 @@ export function Matches() {
             {f}{f !== 'All' && counts[f] > 0 ? ` · ${counts[f]}` : ''}
           </button>
         ))}
+        {govCount > 0 && <button className={`chip ${kind === 'gov' ? 'on' : ''}`} aria-pressed={kind === 'gov'} onClick={() => setKind(kind === 'gov' ? 'any' : 'gov')}>Government · {govCount}</button>}
+        {volCount > 0 && <button className={`chip ${kind === 'volunteer' ? 'on' : ''}`} aria-pressed={kind === 'volunteer'} onClick={() => setKind(kind === 'volunteer' ? 'any' : 'volunteer')}>Volunteer · {volCount}</button>}
         {hiddenCount > 0 && (
           <button className={`chip ${showHidden ? 'on' : ''}`} aria-pressed={showHidden} onClick={() => setShowHidden(!showHidden)} style={{ marginLeft: 'auto' }}>
             {showHidden ? 'Hide filtered out' : `Show hidden · ${hiddenCount}`}
@@ -82,7 +89,7 @@ export function Matches() {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}><div className="pct">{j.match}%</div><div className="muted" style={{ fontSize: 10.5 }}>match</div></div>
               </div>
               <div className="row">
-                <div className="meta">{[j.type, j.mode, j.salary, j.via ? `${j.source} (${j.via})` : j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
+                <div className="meta">{[isPublicSector(j.company) ? 'Government' : '', j.type, j.mode, j.salary, j.via ? `${j.source} (${j.via})` : j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
                 <Status colors={st}>{st[0]}</Status>
               </div>
               {hidden && <div className="xs" style={{ color: 'var(--acc-fg)' }}>Hidden · {j.hidden === 'source' ? `${j.source} is turned off` : hiddenReason(j, s, j.match)}</div>}
@@ -107,6 +114,30 @@ export function Matches() {
           <button className="link" style={{ fontSize: 12 }} onClick={() => go('prefs')}>Adjust preferences</button>
         </div>
       )}
+      <AlsoCheck />
+    </div>
+  )
+}
+
+/** Sites that block automated searching: one tap opens each with her main title already searched. */
+function AlsoCheck() {
+  const { s } = useApp()
+  const p = useProfile()
+  const q = encodeURIComponent((s.searchTitles[0] ?? suggestedTitles(p)[0] ?? 'designer').replace(/^junior\s+/i, ''))
+  const sites = [
+    { name: 'GC Jobs (federal)', url: `https://emploisfp-psjobs.cfp-psc.gc.ca/psrs-srfp/applicant/page2440?requestedPage=1&searchKey=${q}&fromSearch=true&lang=en` },
+    { name: 'Ontario Public Service', url: 'https://www.gojobs.gov.on.ca/Search.aspx' },
+    { name: 'City of Ottawa', url: 'https://ottawa.ca/en/city-hall/jobs-city-ottawa' },
+    { name: 'Volunteer Ottawa', url: 'https://volunteerottawa.ca/' },
+    { name: 'CharityVillage', url: `https://charityvillage.com/jobs/?search_keywords=${q}` },
+  ]
+  return (
+    <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600 }}>Also check</div>
+      <div className="xs muted" style={{ lineHeight: 1.45 }}>These sites block automated searches, so they aren't in your matches. Their postings sometimes appear on LinkedIn, Indeed or Job Bank (look for the Government tag).</div>
+      <div className="wrap" style={{ gap: 6 }}>
+        {sites.map((x) => <a key={x.name} className="chip" href={x.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{x.name} ↗</a>)}
+      </div>
     </div>
   )
 }

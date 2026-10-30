@@ -44,6 +44,10 @@ export function scoreJob(job: Job, p: Profile, s: Settings): Scored {
 }
 
 const toAnnual = (n: number, unit: Job['salUnit']) => (unit === 'hour' ? n * 2000 : n)
+const ageInDays = (iso: string) => {
+  const t = new Date(iso).getTime()
+  return isNaN(t) ? 0 : (Date.now() - t) / 86400e3
+}
 
 /** Why a posting is filtered out by the user's preferences, or null if it passes. */
 export function filteredOut(job: Job, s: Settings): string | null {
@@ -57,6 +61,7 @@ export function filteredOut(job: Job, s: Settings): string | null {
     }
   }
   if (job.yrsMin !== null && job.yrsMin > s.years) return 'experience'
+  if (job.posted && ageInDays(job.posted) > (s.postedWithin ?? 7) + 0.5) return 'too old'
   if (job.mode === 'Remote') {
     if (s.scope === 'some' && job.province && !s.provinces.includes(job.province)) return 'location'
   } else if (s.cities.length) {
@@ -93,15 +98,71 @@ export function suggestedTitles(p: Profile): string[] {
     .slice(0, 2)
 }
 
-/** The searches to run: each job title near the user's first city, and remote in Canada. */
-export function searchesFor(p: Profile, s: Settings) {
-  const titles = (s.searchTitles?.length ? s.searchTitles : suggestedTitles(p)).slice(0, 3)
-  const city = s.cities[0] ?? p.city ?? ''
-  return titles.flatMap((keywords) => [
-    ...(city ? [{ keywords, location: city, remote: false }] : []),
-    { keywords, location: 'Canada', remote: true },
-  ])
+/**
+ * Job roles implied by skills, so searches also catch postings that ask for a skill set rather than a title.
+ * Each role lists the resume words that point to it; tools alone (e.g. "Adobe Illustrator") don't make an illustrator.
+ * Listed most specialised first: when more than four apply, the earlier ones are searched.
+ */
+const SKILL_ROLES: { role: string; signals: RegExp }[] = [
+  { role: 'Motion Designer', signals: /\b(motion graphics?|motion design|after effects|cinema 4d|animation|animator|kinetic typography)\b/gi },
+  { role: 'UX/UI Designer', signals: /\b(ui\/ux|ux\/ui|ux design|ui design|user experience|user interface|wirefram\w*|prototyp\w*|figma|adobe xd|usability)\b/gi },
+  { role: 'Illustrator', signals: /\b(illustration|digital illustration|digital art|drawing|storyboard\w*)\b/gi },
+  { role: 'Social Media Designer', signals: /\b(social media (graphic )?design|social media content|social media graphics|carousel)\b/gi },
+  { role: 'Brand Designer', signals: /\b(branding|brand identity|visual identit\w*|logo design|brand guidelines)\b/gi },
+  { role: 'Visual Designer', signals: /\b(visual design|visual communications?|visual designer)\b/gi },
+  { role: 'Web Designer', signals: /\b(web design|responsive (web|website)|webflow|wordpress|html|css)\b/gi },
+  { role: 'Multimedia Designer', signals: /\b(multimedia|video editing|premiere pro|digital media)\b/gi },
+  { role: 'Production Designer', signals: /\b(print design|packaging|prepress|editorial layout\w*|indesign)\b/gi },
+  { role: 'Content Writer', signals: /\b(copywriting|content writing|professional writing|editing|proofreading)\b/gi },
+  { role: 'Data Analyst', signals: /\b(sql|data analysis|tableau|power bi|excel modelling)\b/gi },
+  { role: 'Software Developer', signals: /\b(javascript|typescript|react|python|java|node\.js|c#)\b/gi },
+  { role: 'Project Coordinator', signals: /\b(project coordination|project management|asana|scheduling)\b/gi },
+]
+
+/** Roles the profile's skills, bullets and summary point to, strongest first. */
+export function suggestedSkillRoles(p: Profile): string[] {
+  const text = [
+    p.skills.join(' · '),
+    p.summary ?? '',
+    ...p.roles.flatMap((r) => r.highlights ?? []),
+    ...(p.education ?? []).flatMap((e) => [e.credential, ...(e.highlights ?? [])]),
+  ].join(' \n ')
+  const titles = suggestedTitles(p).map((t) => t.toLowerCase())
+  return SKILL_ROLES
+    .map(({ role, signals }) => ({ role, hits: new Set((text.match(signals) ?? []).map((m) => m.toLowerCase())).size }))
+    // Two different signals make a role likely; among those, the list order above decides
+    // (counting every synonym would favour roles with many tool names, like HTML and CSS for web design).
+    .filter((r) => r.hits >= 2 && !titles.includes(r.role.toLowerCase()))
+    .slice(0, 4)
+    .map((r) => r.role)
 }
+
+export type SearchKind = 'title' | 'skill' | 'combined' | 'volunteer'
+export interface PlannedSearch { keywords: string; location: string; remote: boolean; kind: SearchKind }
+
+/**
+ * Every search to run. Titles go to every site; skill roles to Indeed; LinkedIn gets one OR query
+ * of all of them; volunteer searches run when Volunteer is one of the user's job types.
+ */
+export function searchesFor(p: Profile, s: Settings): PlannedSearch[] {
+  const titles = (s.searchTitles?.length ? s.searchTitles : suggestedTitles(p)).slice(0, 3)
+  const skills = (s.searchSkills?.length ? s.searchSkills : suggestedSkillRoles(p)).slice(0, 4)
+  const city = s.cities[0] ?? p.city ?? ''
+  const places = [...(city ? [{ location: city, remote: false }] : []), { location: 'Canada', remote: true }]
+  const each = (keywords: string, kind: SearchKind) => places.map((pl) => ({ keywords, ...pl, kind }))
+  const all = [...titles, ...skills]
+  const field = (titles[0] ?? '').replace(/^junior\s+/i, '')
+  return [
+    ...titles.flatMap((t) => each(t, 'title')),
+    ...skills.flatMap((t) => each(t, 'skill')),
+    ...(all.length ? each(all.map((t) => `"${t}"`).join(' OR '), 'combined') : []),
+    ...(s.types.includes('Volunteer') && field ? each(`volunteer ${field}`, 'volunteer') : []),
+  ]
+}
+
+/** Employers that are governments or public bodies, for the Government tag. */
+const PUBLIC_SECTOR = /\b(government|gouvernement|public service|fonction publique|city of|ville d[e']|municipalit|region(al)? municipality|county of|town of|province of|ministry|ministère|crown|federal|canada revenue|statistics canada|health canada|parks canada|canada post|shared services canada|national defence|defence construction|rcmp|employment and social development|esdc|treasury board|natural resources canada|global affairs|immigration, refugees|canadian heritage|library and archives|national research council|elections canada|house of commons|senate of canada|public health agency|transport canada|environment and climate change|innovation, science|agriculture and agri-food|fisheries and oceans|veterans affairs|indigenous services|correctional service|canada border|ontario public service|ottawa public library|ottawa police|oc transpo|school board|conseil scolaire|university of ottawa|carleton university|algonquin college|la cité)\b/i
+export const isPublicSector = (company: string) => PUBLIC_SECTOR.test(company)
 
 // ---------- Tailoring ----------
 
@@ -236,6 +297,8 @@ export function hiddenReason(job: Job, s: Settings, match: number): string {
       return job.mode === 'Remote' ? `Remote in ${job.province}, outside your provinces` : `${job.loc} isn't one of your cities`
     case 'source':
       return `${job.source} is turned off`
+    case 'too old':
+      return `Posted ${Math.round(ageInDays(job.posted))} days ago; you chose the last ${s.postedWithin ?? 7}`
     default:
       return match < MIN_SCORE ? `Low match (${match}%)` : ''
   }

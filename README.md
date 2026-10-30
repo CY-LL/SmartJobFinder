@@ -34,7 +34,9 @@ All reading is done in the browser with pattern rules ([`src/profile.ts`](src/pr
 | Workopolis | `shahidirfan~Workopolis-Job-Scraper` | `APIFY_WORKOPOLIS_ACTOR` |
 | Google Jobs | `orgupdate~google-jobs-scraper` (first local search only; includes company career pages) | `APIFY_GOOGLE_JOBS_ACTOR` |
 
-Runs start in the background and the browser polls until they finish. The free Apify plan runs at most 5 scrapers at once, so the function starts what fits and returns the rest as `queued`; the browser starts those as earlier runs finish. Results are de-duplicated across sites, then scored and filtered in the browser ([`src/match.ts`](src/match.ts)). A full search costs roughly $0.25 of Apify credit with every source on; each source can be switched off in Settings.
+What gets searched ([`src/match.ts`](src/match.ts) `searchesFor`): the user's job titles on every site; roles implied by their skills, projects and courses (e.g. Motion Designer, UX/UI Designer, Illustrator) on Indeed; one OR query of all of them on LinkedIn; and volunteer searches when Volunteer is one of their job types. Titles, skill roles and a "posted within" window (24 hours to 2 weeks) are editable in Preferences. Government and public-sector employers are tagged. GC Jobs, the Ontario Public Service and the City of Ottawa block automated access, so Matches links to them instead.
+
+Runs start in the background and the browser polls until they finish. The free Apify plan runs at most 5 scrapers at once, so the function starts what fits and returns the rest as `queued`; the browser starts those as earlier runs finish. Results are de-duplicated across sites, then scored and filtered in the browser ([`src/match.ts`](src/match.ts)). A full search costs roughly $0.60 of Apify credit with every source on and the default titles and roles; each source can be switched off in Settings.
 
 There's no server-side scheduler or user accounts: a scheduled search runs when the app is open and one is due, and all data lives in the browser's local storage.
 

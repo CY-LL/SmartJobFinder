@@ -3,7 +3,7 @@ import { CITIES, JOB_TYPES, LEVELS, PROVINCES } from '../data'
 import { fmtSalary, toggleIn } from '../store'
 import type { Settings } from '../store'
 import { emptyProfile, levelFor, parseResume } from '../profile'
-import { suggestedTitles } from '../match'
+import { suggestedSkillRoles, suggestedTitles } from '../match'
 import type { Education, Profile, Role } from '../profile'
 import { extractText } from '../extract'
 import { mergeProfiles, readWebsites } from '../web'
@@ -455,36 +455,74 @@ export function Review() {
   )
 }
 
-/** The job titles searched on every site: suggested from the profile until the user edits the list. */
-function TitlesPicker() {
-  const { s, set } = useApp()
-  const p = useProfile()
+/** A list of search terms, suggested from the profile until the user edits it. */
+function TermsPicker({ title, saved, suggested, max, placeholder, note, onSave }: {
+  title: string
+  saved: string[]
+  suggested: string[]
+  max: number
+  placeholder: string
+  note: string
+  onSave: (next: string[]) => void
+}) {
   const [draft, setDraft] = useState('')
-  const custom = s.searchTitles.length > 0
-  const titles = custom ? s.searchTitles : suggestedTitles(p)
-  const save = (next: string[]) => set({ searchTitles: next })
+  const custom = saved.length > 0
+  const terms = custom ? saved : suggested
   const add = () => {
     const v = draft.trim()
-    if (v && titles.length < 3 && !titles.some((t) => t.toLowerCase() === v.toLowerCase())) save([...titles, v])
+    if (v && terms.length < max && !terms.some((t) => t.toLowerCase() === v.toLowerCase())) onSave([...terms, v])
     setDraft('')
   }
   return (
     <div className="stack">
-      <SectionHead title="Job titles to search" hint={custom ? <button className="link" style={{ fontSize: 12 }} onClick={() => save([])}>Use suggestions</button> : 'Suggested from your profile'} />
+      <SectionHead title={title} hint={custom ? <button className="link" style={{ fontSize: 12 }} onClick={() => onSave([])}>Use suggestions</button> : 'Suggested from your profile'} />
       <div className="card" style={{ borderRadius: 14, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="wrap" style={{ gap: 6 }}>
-          {titles.map((t) => (
-            <div key={t} className="city-chip">{t}<button aria-label={`Remove ${t}`} onClick={() => save(titles.filter((x) => x !== t))}>✕</button></div>
+          {terms.length === 0 && <span className="small muted">Nothing suggested yet.</span>}
+          {terms.map((t) => (
+            <div key={t} className="city-chip">{t}<button aria-label={`Remove ${t}`} onClick={() => onSave(terms.filter((x) => x !== t))}>✕</button></div>
           ))}
         </div>
-        {titles.length < 3 && (
+        {terms.length < max && (
           <form onSubmit={(e) => { e.preventDefault(); add() }}>
-            <input className="text-input" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} placeholder="Add a title, e.g. UI Designer" aria-label="Add a job title" />
+            <input className="text-input" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} placeholder={placeholder} aria-label={placeholder} />
           </form>
         )}
       </div>
-      <div className="xs muted" style={{ lineHeight: 1.45 }}>Up to 3. Each title is searched near your city and remote, on every site you have on (about $0.20 per title per search).</div>
+      <div className="xs muted" style={{ lineHeight: 1.45 }}>{note}</div>
     </div>
+  )
+}
+
+/** What gets searched: job titles, skill-based roles, and how recent postings must be. */
+function SearchTerms() {
+  const { s, set } = useApp()
+  const p = useProfile()
+  return (
+    <>
+      <TermsPicker
+        title="Job titles to search"
+        saved={s.searchTitles}
+        suggested={suggestedTitles(p)}
+        max={3}
+        placeholder="Add a title, e.g. UI Designer"
+        note="Up to 3. Searched near your city and remote, on every site you have on."
+        onSave={(next) => set({ searchTitles: next })}
+      />
+      <TermsPicker
+        title="Roles that use your skills"
+        saved={s.searchSkills}
+        suggested={suggestedSkillRoles(p)}
+        max={4}
+        placeholder="Add a role, e.g. Motion Designer"
+        note="Up to 4. Picked from the skills, projects and courses on your resume, so postings that ask for those skills turn up even when the title differs. Searched on LinkedIn and Indeed."
+        onSave={(next) => set({ searchSkills: next })}
+      />
+      <div className="stack">
+        <SectionHead title="Posted within" hint="Older postings are hidden" />
+        <Seg options={['1', '3', '7', '14'] as const} value={String(s.postedWithin ?? 7) as '1' | '3' | '7' | '14'} onChange={(v) => set({ postedWithin: Number(v) })} labels={{ '1': '24 hours', '3': '3 days', '7': '1 week', '14': '2 weeks' }} />
+      </div>
+    </>
   )
 }
 
@@ -503,7 +541,7 @@ export function Prefs() {
     <div className="screen" style={{ gap: 24 }}>
       <div className="h1">Where and what you'll take.</div>
 
-      <TitlesPicker />
+      <SearchTerms />
 
       <div className="stack">
         <SectionHead title="On-site" hint="Cities you'd commute to" />
