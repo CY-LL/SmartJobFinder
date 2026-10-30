@@ -30,8 +30,11 @@ export interface Settings {
   conn: Record<string, boolean>
   /** Employers whose job boards are read directly. */
   employers: Employer[]
-  /** The mail folder LinkedIn and Indeed job alerts are put in. */
+  /** The Gmail label LinkedIn and Indeed job alerts are put in. */
   mailFolder: string
+  /** The user's Gmail Apps Script web app address, and the key written into the script. */
+  mailScript: string
+  mailKey: string
   /** Postings from the latest searches, newest search first. */
   jobs: Job[]
   jobStatus: Record<string, JobStatus>
@@ -66,6 +69,8 @@ export const DEFAULTS: Settings = {
   conn: { 'Email alerts': true, Employers: true, Himalayas: true, Jobicy: true, Remotive: true, 'Remote OK': true, LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank': true, Workopolis: true, 'Google Jobs': true },
   employers: [],
   mailFolder: 'joboffers',
+  mailScript: '',
+  mailKey: '',
   jobs: [],
   jobStatus: {},
   docs: {},

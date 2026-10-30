@@ -24,11 +24,11 @@ async function freeSearch(s: Settings, searches: PlannedSearch[], sources: strin
   return data.jobs
 }
 
-/** Job alert emails in the user's mail folder, read by /api/mail. Skipped quietly until the mailbox is set up. */
+/** Job alert emails in the user's Gmail label, read by /api/mail. Skipped until Gmail is connected. */
 async function mailSearch(s: Settings, failed: string[]): Promise<Job[]> {
-  const res = await fetch('/api/mail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: s.mailFolder || 'joboffers', days: s.postedWithin ?? 7 }) })
+  if (!s.mailScript || !s.mailKey) return []
+  const res = await fetch('/api/mail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ script: s.mailScript, key: s.mailKey, days: s.postedWithin ?? 7 }) })
   const data = await res.json().catch(() => ({}))
-  if (res.status === 501) return []
   if (!res.ok || !data.jobs) throw new Error(data.message ?? 'Your job alert emails couldn’t be read.')
   failed.push(...(data.failed ?? []))
   return data.jobs

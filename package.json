@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "imapflow": "^2.10.0",
     "mailparser": "^3.14.1",
     "mammoth": "^1.13.0",
     "pdfjs-dist": "^6.4.299",

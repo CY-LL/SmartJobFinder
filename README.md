@@ -41,13 +41,16 @@ Postings are kept when their title contains the words of one of the user's title
 
 ### Job alert emails
 
-`/api/mail` ([`netlify/functions/mail.mts`](netlify/functions/mail.mts)) reads LinkedIn and Indeed job alert emails from one mail folder (default `joboffers`, set on Settings → Job alert emails). It connects over IMAP read-only, reads the emails from the "posted within" window (up to 60), and turns each job card into a posting ([`netlify/lib/alerts.mts`](netlify/lib/alerts.mts)). Jobs keep the same ids as the Apify LinkedIn and Indeed searches, so a job found both ways shows once. Set in Netlify:
+`/api/mail` ([`netlify/functions/mail.mts`](netlify/functions/mail.mts)) reads LinkedIn and Indeed job alert emails from one Gmail label (default `joboffers`) and turns each job card into a posting ([`netlify/lib/alerts.mts`](netlify/lib/alerts.mts)). Jobs keep the same ids as the Apify LinkedIn and Indeed searches, so a job found both ways shows once.
 
-- `MAIL_USER` — the email address
-- `MAIL_PASSWORD` — for Gmail, an app password (myaccount.google.com/apppasswords; needs 2-Step Verification)
-- `MAIL_HOST`, `MAIL_PORT` — only for providers other than Gmail (defaults `imap.gmail.com`, `993`)
+Gmail is read through a Google Apps Script the user installs in their own account, from Settings → Job alert emails ([`src/gmailScript.ts`](src/gmailScript.ts) generates it). The script:
 
-A Gmail filter (`from:jobalerts-noreply@linkedin.com OR from:alert@indeed.com` → label `joboffers`) files alerts automatically. Without a mailbox, alert emails saved as `.eml` files can be added on the same page. Outlook.com no longer allows app passwords for IMAP.
+- has read-only Gmail access (`gmail.readonly`), so it can't send, change or delete mail
+- only searches the one label written into it, from the "posted within" window (up to 50 emails)
+- answers only to a random key written into it, which the app keeps in the browser
+- is deployed as a web app that runs as the user, open to "Anyone" so the function can call it; the key keeps others out
+
+No mail password is stored anywhere, and access can be revoked at myaccount.google.com/permissions. The function only calls `https://script.google.com/macros/s/…/exec` addresses. A Gmail filter (`from:(jobalerts-noreply@linkedin.com OR alert@indeed.com)` → label `joboffers`) files alerts automatically. Without Gmail, alert emails saved as `.eml` files can be added on the same page.
 
 Not used: Job Bank's own site (its terms forbid scripts and scrapers; its open data is only monthly), Adzuna (paid), Arbeitnow (Europe only).
 
