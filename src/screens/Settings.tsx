@@ -1,4 +1,4 @@
-import { LIVE_SOURCES, PLANNED_SOURCES, fmtDate } from '../data'
+import { SOURCES, fmtDate } from '../data'
 import type { Application } from '../data'
 import { fmtSalary } from '../store'
 import { Toggle, useApp } from '../ui'
@@ -48,23 +48,17 @@ export function Settings() {
       <div className="stack" style={{ gap: 8 }}>
         <div className="eyebrow" style={{ padding: '0 4px' }}>JOB SOURCES</div>
         <div className="list">
-          {LIVE_SOURCES.map((name) => {
+          {SOURCES.map(({ name, note }) => {
             const on = s.conn[name] !== false
             return (
               <div key={name} className="li" style={{ padding: '11px 0' }}>
-                <div><div>{name}</div><div className="xs" style={{ color: on ? 'var(--green)' : 'var(--faint)' }}>{on ? 'Searching · via Apify' : 'Off'}</div></div>
+                <div><div>{name}</div><div className="xs" style={{ color: on ? 'var(--green)' : 'var(--faint)' }}>{on ? `Searching · ${note}` : 'Off'}</div></div>
                 <Toggle label={name} on={on} onChange={(v) => set({ conn: { ...s.conn, [name]: v } })} />
               </div>
             )
           })}
-          {PLANNED_SOURCES.map((name) => (
-            <div key={name} className="li" style={{ padding: '11px 0' }}>
-              <div><div className="muted">{name}</div><div className="xs faint">Not available yet</div></div>
-              <Toggle label={name} on={false} disabled onChange={() => {}} />
-            </div>
-          ))}
         </div>
-        <div className="xs muted" style={{ padding: '0 4px', lineHeight: 1.45 }}>Searches run through Apify scrapers and use your Apify credit (about $0.10 per search). You apply on the employer's site; SmartJobFinder prepares your documents and keeps the log.</div>
+        <div className="xs muted" style={{ padding: '0 4px', lineHeight: 1.45 }}>Searches run through Apify scrapers and use your Apify credit (about $0.25 per search with every source on; turn sources off to spend less). You apply on the employer's site; SmartJobFinder prepares your documents and keeps the log.</div>
       </div>
 
       <div className="stack" style={{ gap: 8 }}>

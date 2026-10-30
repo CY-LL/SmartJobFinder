@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { SOURCE_NAMES } from './data'
 import type { Job } from './data'
 import { searchesFor } from './match'
 import { nextRunDate } from './store'
@@ -22,25 +23,47 @@ export function useSearch(s: Settings, set: (p: Patch) => void) {
     busy.current = true
     setState({ running: true, progress: 'Starting search…', error: '' })
     try {
-      const sources = Object.entries(s.conn).filter(([, on]) => on).map(([k]) => k)
-      let res = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ searches: searchesFor(s.profile, s), sources }) })
-      let data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.runs) throw new Error(data.message ?? 'Job search isn’t available right now.')
-      const runs = data.runs.map((r: { id: string; source: string }) => `${r.id}:${r.source}`).join(',')
-      for (let tries = 0; tries < 80; tries++) {
+      // A source missing from saved settings (added in a later version) counts as on.
+      const sources = SOURCE_NAMES.filter((k) => s.conn[k] !== false)
+      const searches = searchesFor(s.profile, s)
+      // The Apify account runs only a few scrapers at once, so the server starts what fits and hands back
+      // the rest as `queued`; those are started here as earlier runs finish.
+      const start = async (tasks?: unknown[]) => {
+        const res = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ searches, sources, tasks }) })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || !data.runs) throw new Error(data.message ?? 'Job search isn’t available right now.')
+        return data as { runs: { id: string; source: string }[]; queued: unknown[]; failed: string[]; total: number }
+      }
+      const first = await start()
+      const runs = [...first.runs]
+      let queued = first.queued
+      const failed = [...first.failed]
+      const total = first.total
+      let data: { jobs?: Job[]; failed?: string[]; done?: number; message?: string } = {}
+      let lastDone = 0
+      for (let tries = 0; tries < 120; tries++) {
         await wait(4000)
-        res = await fetch(`/api/jobs?runs=${encodeURIComponent(runs)}`)
+        const res = await fetch(`/api/jobs?runs=${encodeURIComponent(runs.map((r) => `${r.id}:${r.source}`).join(','))}`)
         data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.message ?? 'Job search failed.')
-        if (data.jobs) break
-        setState((x) => ({ ...x, progress: `Searching ${sources.join(' and ')}… ${data.done ?? 0} of ${data.total ?? '?'} searches done` }))
+        const done = data.jobs ? runs.length : data.done ?? 0
+        if (queued.length && (done > lastDone || data.jobs)) {
+          const more = await start(queued)
+          runs.push(...more.runs)
+          failed.push(...more.failed)
+          queued = more.queued
+          lastDone = done
+          continue
+        }
+        if (data.jobs && !queued.length) break
+        setState((x) => ({ ...x, progress: `Searching ${sources.length} job sites… ${done} of ${total} searches done` }))
       }
-      if (!data.jobs) throw new Error('The search is taking too long. Try again in a few minutes.')
-      const found = data.jobs as Job[]
+      if (!data.jobs || queued.length) throw new Error('The search is taking too long. Try again in a few minutes.')
+      const found = data.jobs
       set((prev) => {
         // Keep postings the user acted on; replace everything else with the fresh results.
         const keep = prev.jobs.filter((j) => prev.jobStatus[j.id] && !found.some((f) => f.id === j.id))
-        return { jobs: [...found, ...keep], lastRun: { at: new Date().toISOString(), found: found.length, failed: data.failed ?? [] } }
+        return { jobs: [...found, ...keep], lastRun: { at: new Date().toISOString(), found: found.length, failed: [...failed, ...(data.failed ?? [])] } }
       })
       setState({ running: false, progress: '', error: '' })
     } catch (e) {

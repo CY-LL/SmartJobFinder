@@ -25,6 +25,8 @@ export interface Settings {
   /** Postings from the latest searches, newest search first. */
   jobs: Job[]
   jobStatus: Record<string, JobStatus>
+  /** The user's edited resume / cover letter for a job, as HTML, keyed by job id. */
+  docs: Record<string, { resume?: string; cover?: string }>
   apps: Application[]
   lastRun: { at: string; found: number; failed: string[] } | null
 }
@@ -48,9 +50,10 @@ export const DEFAULTS: Settings = {
   freq: 'Weekdays',
   time: '07:00',
   noReapply: true,
-  conn: { LinkedIn: true, Indeed: true },
+  conn: { LinkedIn: true, Indeed: true, Glassdoor: true, 'Job Bank': true, Workopolis: true, 'Google Jobs': true },
   jobs: [],
   jobStatus: {},
+  docs: {},
   apps: [],
   lastRun: null,
 }

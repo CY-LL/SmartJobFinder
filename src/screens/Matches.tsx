@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { JOB_STATUS, ago, fmtDate } from '../data'
+import { useRef, useState } from 'react'
+import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
 import { tailor } from '../match'
+import { DocBox, printDoc, sanitize } from './DocBox'
 
 type Filter = 'All' | 'New' | 'Applied'
 
@@ -17,13 +18,13 @@ export function Matches() {
   const list = shown.filter((j) => filter === 'All' ? j.status !== 'skipped' : filter === 'New' ? j.status === 'new' : j.status === 'applied')
   const hiddenCount = all.length - shown.length
   const counts = { New: shown.filter((j) => j.status === 'new').length, Applied: shown.filter((j) => j.status === 'applied').length }
-  const sources = Object.entries(s.conn).filter(([, on]) => on).map(([k]) => k)
+  const sources = SOURCE_NAMES.filter((k) => s.conn[k] !== false)
 
   return (
     <div className="screen tight">
       <div className="page-head">
         <div className="h-page">Matches</div>
-        <div className="small muted" style={{ paddingBottom: 6 }}>{sources.join(' · ') || 'No sources on'}</div>
+        <div className="small muted" style={{ paddingBottom: 6 }}>{sources.length ? `Searching ${sources.length} of ${SOURCE_NAMES.length} sites` : 'No sources on'}</div>
       </div>
       <div className="dark-card">
         <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -70,7 +71,7 @@ export function Matches() {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}><div className="pct">{j.match}%</div><div className="muted" style={{ fontSize: 10.5 }}>match</div></div>
               </div>
               <div className="row">
-                <div className="meta">{[j.type, j.mode, j.salary, j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
+                <div className="meta">{[j.type, j.mode, j.salary, j.via ? `${j.source} (${j.via})` : j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
                 <Status colors={st}>{st[0]}</Status>
               </div>
               {ex && (
@@ -181,20 +182,33 @@ function docText(el: HTMLElement | null) {
 }
 
 export function JobDetail({ id }: { id: string }) {
-  const { set, go, toast } = useApp()
+  const { s, set, go, toast } = useApp()
   const jobs = useJobs()
   const [doc, setDoc] = useState<'resume' | 'cover'>('resume')
-  const [docEl, setDocEl] = useState<HTMLDivElement | null>(null)
+  const resumeEl = useRef<HTMLDivElement | null>(null)
+  const coverEl = useRef<HTMLDivElement | null>(null)
   const [more, setMore] = useState(false)
   const job = jobs.find((j) => j.id === id)
   if (!job) return <div className="screen"><button className="back" onClick={() => go('matches')}>← Matches</button><div className="empty">That job is no longer in your results.</div></div>
 
+  const saved = s.docs[job.id] ?? {}
+  const edited = !!(saved.resume || saved.cover)
+  const saveDoc = (kind: 'resume' | 'cover', html: string | null) => set((p) => {
+    const next = { ...(p.docs[job.id] ?? {}) }
+    if (html === null) delete next[kind]
+    else next[kind] = html
+    return { docs: { ...p.docs, [job.id]: next } }
+  })
+  const current = () => (doc === 'resume' ? resumeEl.current : coverEl.current)
   const markApplied = () => {
     const now = new Date().toISOString()
     const app: Application = {
       id: 'a-' + job.id, jobId: job.id, company: job.company, role: job.title, date: now, source: job.source, url: job.url,
       status: 'Applied', level: job.level, yrs: job.yrs, desc: job.desc, tags: job.tags,
-      history: [{ e: 'Tailored resume & cover letter prepared', d: now }, { e: `Applied via ${job.source}`, d: now }],
+      history: [{ e: edited ? 'Tailored resume & cover letter prepared and edited' : 'Tailored resume & cover letter prepared', d: now }, { e: `Applied via ${job.source}`, d: now }],
+      // Keep exactly what was sent, so Applications can show it later even if the profile changes.
+      resumeHtml: sanitize(resumeEl.current?.innerHTML ?? ''),
+      coverHtml: sanitize(coverEl.current?.innerHTML ?? ''),
     }
     set((p) => ({
       jobStatus: { ...p.jobStatus, [job.id]: 'applied' },
@@ -216,7 +230,7 @@ export function JobDetail({ id }: { id: string }) {
   })
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(docText(docEl))
+      await navigator.clipboard.writeText(docText(current()))
       toast(doc === 'resume' ? 'Resume copied' : 'Cover letter copied')
     } catch {
       toast('Couldn’t copy — select the text instead')
@@ -228,7 +242,7 @@ export function JobDetail({ id }: { id: string }) {
     <div className="screen" style={{ padding: '6px 20px 24px', gap: 18 }}>
       <button className="back" onClick={() => go('matches')}>← Matches</button>
       <div>
-        <div className="eyebrow" style={{ letterSpacing: '.06em' }}>{job.source.toUpperCase()} · {(job.posted ? fmtDate(job.posted) : '').toUpperCase()}</div>
+        <div className="eyebrow" style={{ letterSpacing: '.06em' }}>{[job.source, job.via && `via ${job.via}`, job.posted && fmtDate(job.posted)].filter(Boolean).join(' · ').toUpperCase()}</div>
         <div className="h1" style={{ fontSize: 28, marginTop: 6 }}>{job.title}</div>
         <div style={{ fontSize: 14, marginTop: 6 }}>{job.company}</div>
         <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{[job.type, job.loc, job.mode === 'Remote' ? '' : job.mode, job.salary].filter(Boolean).join(' · ')}</div>
@@ -254,15 +268,17 @@ export function JobDetail({ id }: { id: string }) {
             <button className={doc === 'cover' ? 'on' : ''} onClick={() => setDoc('cover')}>Cover letter</button>
           </div>
         </div>
-        <div className="doc" ref={setDocEl}>
-          {doc === 'resume' ? <TailoredResume job={job} /> : <CoverLetter job={job} company={job.company} />}
-        </div>
+        <DocBox hidden={doc !== 'resume'} elRef={resumeEl} generated={<TailoredResume job={job} />} saved={saved.resume} onSave={(h) => saveDoc('resume', h)} />
+        <DocBox hidden={doc !== 'cover'} elRef={coverEl} generated={<CoverLetter job={job} company={job.company} />} saved={saved.cover} onSave={(h) => saveDoc('cover', h)} />
         <div className="row">
           <div className="xs muted" style={{ lineHeight: 1.45 }}>
             <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--acc-hl)', borderRadius: 2, marginRight: 6, verticalAlign: -1 }} />
-            Your own bullets, picked and ordered for this posting. Nothing is invented.
+            {(doc === 'resume' ? saved.resume : saved.cover) ? 'Your edited version for this job.' : 'Your own bullets, picked and ordered for this posting. Edit anything before you apply.'}
           </div>
-          <button className="chip" style={{ flexShrink: 0 }} onClick={copy}>Copy text</button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button className="chip" onClick={copy}>Copy text</button>
+            <button className="chip" onClick={() => printDoc(current()?.innerHTML ?? '', `${s.profile?.name ?? 'Resume'} — ${doc === 'resume' ? 'Resume' : 'Cover letter'} — ${job.company}`) || toast('Allow pop-ups to print or save as PDF')}>PDF</button>
+          </div>
         </div>
       </div>
       {job.status === 'new' && (

@@ -23,16 +23,28 @@ All reading is done in the browser with pattern rules ([`src/profile.ts`](src/pr
 - **LinkedIn PDF fallback** — when the lookup isn't configured or fails, the app walks the user through LinkedIn's *Save to PDF* and parses that file instead.
 ## Job search
 
-`/api/jobs` ([`netlify/functions/jobs.mts`](netlify/functions/jobs.mts)) searches **Indeed** (`valig~indeed-jobs-scraper`) and **LinkedIn** (`curious_coder~linkedin-jobs-scraper`) on Apify, using the profile's title near the user's city and remote in Canada. Runs start in the background and the browser polls until they finish. Results are de-duplicated across sites, then scored and filtered in the browser ([`src/match.ts`](src/match.ts)) by title fit, skills found in the posting, level, years of experience, job type, salary and location.
+`/api/jobs` ([`netlify/functions/jobs.mts`](netlify/functions/jobs.mts)) searches six sources through Apify scrapers, using the profile's title near the user's city and remote in Canada:
 
-- Override the scrapers with `APIFY_INDEED_ACTOR` / `APIFY_LINKEDIN_JOBS_ACTOR`.
-- A full search costs about $0.10 of Apify credit.
-- There's no server-side scheduler or user accounts: a scheduled search runs when the app is open and one is due, and all data lives in the browser's local storage.
-- The user applies on the employer's site ("Apply on Indeed ↗"); the app prepares the tailored resume and cover letter and logs the application.
+| Source | Scraper | Override |
+|---|---|---|
+| LinkedIn | `curious_coder~linkedin-jobs-scraper` | `APIFY_LINKEDIN_JOBS_ACTOR` |
+| Indeed | `valig~indeed-jobs-scraper` | `APIFY_INDEED_ACTOR` |
+| Glassdoor | `valig~glassdoor-jobs-scraper` | `APIFY_GLASSDOOR_ACTOR` |
+| Job Bank | `getascraper~jobbank-scraper` (local searches only) | `APIFY_JOBBANK_ACTOR` |
+| Workopolis | `shahidirfan~Workopolis-Job-Scraper` | `APIFY_WORKOPOLIS_ACTOR` |
+| Google Jobs | `orgupdate~google-jobs-scraper` (first local search only; includes company career pages) | `APIFY_GOOGLE_JOBS_ACTOR` |
+
+Runs start in the background and the browser polls until they finish. The free Apify plan runs at most 5 scrapers at once, so the function starts what fits and returns the rest as `queued`; the browser starts those as earlier runs finish. Results are de-duplicated across sites, then scored and filtered in the browser ([`src/match.ts`](src/match.ts)). A full search costs roughly $0.25 of Apify credit with every source on; each source can be switched off in Settings.
+
+There's no server-side scheduler or user accounts: a scheduled search runs when the app is open and one is due, and all data lives in the browser's local storage.
+
+## Applying
+
+Each match gets a resume and cover letter built from the user's own bullets ([`src/match.ts`](src/match.ts) `tailor`). Both can be edited per job before applying ([`src/screens/DocBox.tsx`](src/screens/DocBox.tsx)), copied as text, or printed / saved as PDF. "Apply on …" opens the posting; the documents exactly as sent are stored with the application.
 
 ## Status
 
-Glassdoor, Job Bank, company career pages and Workopolis are listed in Settings but not connected yet. Applications are not submitted automatically.
+Applications are not submitted automatically; the user submits on the employer's site.
 
 Locally, `npm run dev` serves the functions too; set `APIFY_TOKEN` in your shell first.
 

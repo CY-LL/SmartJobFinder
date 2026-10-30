@@ -3,9 +3,10 @@
 //     → { runs: [{ id, source }] }   (starts one scraper run per source and search)
 //   GET  /api/jobs?runs=<id>:<source>,…
 //     → { status: 'running', done, total } until every run has finished, then { jobs, failed }
-// Requires APIFY_TOKEN. APIFY_INDEED_ACTOR / APIFY_LINKEDIN_JOBS_ACTOR override the scrapers.
+// Requires APIFY_TOKEN. APIFY_<SOURCE>_ACTOR variables override the scrapers.
 
 import { checkRun, json, notConfigured, startRun, str } from '../lib/apify.mts'
+import { htmlToText } from '../lib/fetchdoc.mts'
 import type { Json } from '../lib/apify.mts'
 
 const SOURCES = {
@@ -20,9 +21,34 @@ const SOURCES = {
     input: (s: Search) => ({ keywords: s.remote ? `${s.keywords} remote` : s.keywords, location: s.remote ? 'Canada' : s.location, datePosted: 'pastWeek', limitPerSource: 25, scrapeCompany: false }),
     normalize: (j: Json) => fromLinkedIn(j),
   },
+  Glassdoor: {
+    actor: () => Netlify.env.get('APIFY_GLASSDOOR_ACTOR') || 'valig~glassdoor-jobs-scraper',
+    // Glassdoor only matches places spelled out in full: "Ottawa, Ontario, Canada", not "Ottawa, ON".
+    input: (s: Search) => ({ keywords: s.keywords, location: s.remote ? 'Canada' : fullPlace(s.location), remoteWorkType: s.remote, daysOld: 14, limit: 30 }),
+    normalize: (j: Json) => fromGlassdoor(j),
+  },
+  'Job Bank': {
+    actor: () => Netlify.env.get('APIFY_JOBBANK_ACTOR') || 'getascraper~jobbank-scraper',
+    // Job Bank is searched by city; a Canada-wide "remote" search would mostly return unrelated postings.
+    input: (s: Search) => (s.remote ? null : { searchKeyword: s.keywords, location: s.location.split(',')[0].trim(), datePosted: 'any', maxItems: 30 }),
+    normalize: (j: Json) => fromJobBank(j),
+  },
+  Workopolis: {
+    actor: () => Netlify.env.get('APIFY_WORKOPOLIS_ACTOR') || 'shahidirfan~Workopolis-Job-Scraper',
+    input: (s: Search) => ({ keyword: s.remote ? `${s.keywords} remote` : s.keywords, location: s.remote ? 'Canada' : s.location, posted_date: '30d', results_wanted: 30, max_pages: 2 }),
+    normalize: (j: Json) => fromWorkopolis(j),
+  },
+  // Google's job search also lists postings from company career pages. It costs far more per job than
+  // the other sources, so it only runs the first local search.
+  'Google Jobs': {
+    actor: () => Netlify.env.get('APIFY_GOOGLE_JOBS_ACTOR') || 'orgupdate~google-jobs-scraper',
+    input: (s: Search, first: boolean) => (s.remote || !first ? null : { countryName: 'canada', locationName: fullPlace(s.location).replace(/, Canada$/, ''), targetLocations: [s.location.split(',')[0].trim()], includeKeyword: s.keywords, pagesToFetch: 1, datePosted: 'week' }),
+    normalize: (j: Json) => fromGoogle(j),
+  },
 } as const
 type Source = keyof typeof SOURCES
 interface Search { keywords: string; location: string; remote: boolean }
+interface Task { source: Source; search: number }
 
 export interface FoundJob {
   id: string
@@ -32,6 +58,8 @@ export interface FoundJob {
   province: string
   mode: 'On-site' | 'Hybrid' | 'Remote'
   source: Source
+  /** Where the posting really lives, when a source re-lists other sites (Google Jobs, Job Bank). */
+  via?: string
   type: string
   salary: string
   salMin: number | null
@@ -179,6 +207,137 @@ function fromLinkedIn(j: Json): FoundJob | null {
   }
 }
 
+const PROVINCE_NAMES: Record<string, string> = { ON: 'Ontario', QC: 'Quebec', BC: 'British Columbia', AB: 'Alberta', MB: 'Manitoba', SK: 'Saskatchewan', NS: 'Nova Scotia', NB: 'New Brunswick', NL: 'Newfoundland and Labrador', PE: 'Prince Edward Island', YT: 'Yukon', NT: 'Northwest Territories', NU: 'Nunavut' }
+/** "Ottawa, ON" → "Ottawa, Ontario, Canada" */
+function fullPlace(place: string): string {
+  const [city, prov] = place.split(',').map((x) => x.trim())
+  // "Ottawa, Canada" (as LinkedIn writes it) has no province; the city alone works on Glassdoor.
+  const province = PROVINCE_NAMES[prov?.toUpperCase()] ?? (prov && !/^canada$/i.test(prov) ? prov : '')
+  return province ? `${city}, ${province}, Canada` : city
+}
+
+/** Shared tail of every normalizer: work out mode, level, years and the display location. */
+function finish(base: { id: string; title: string; company: string; city: string; province: string; source: Source; via?: string; typeText: string; salMin: number | null; salMax: number | null; salUnit: 'year' | 'hour' | null; posted: string; url: string; applyUrl?: string; desc: string; modeText?: string; seniority?: string; tags?: string[] }): FoundJob {
+  const desc = clip(base.desc)
+  const mode = modeOf(base.modeText ?? '', base.title, base.city, desc)
+  const { yrs, yrsMin } = yearsOf(desc)
+  return {
+    id: base.id,
+    title: base.title,
+    company: base.company || 'Company not listed',
+    loc: mode === 'Remote' ? `Remote · ${base.province || 'Canada'}` : [base.city, base.province].filter(Boolean).join(', ') || 'Canada',
+    province: base.province,
+    mode,
+    source: base.source,
+    via: base.via,
+    type: typeOf(base.typeText, base.title),
+    salary: salaryText(base.salMin, base.salMax, base.salUnit),
+    salMin: base.salMin, salMax: base.salMax, salUnit: base.salUnit,
+    posted: base.posted,
+    url: base.url,
+    applyUrl: base.applyUrl || base.url,
+    desc,
+    level: levelOf(base.title, base.seniority ?? '', yrsMin),
+    yrs, yrsMin,
+    tags: base.tags ?? [],
+  }
+}
+
+const num = (v: unknown) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : null)
+const unitOf = (v: unknown): 'year' | 'hour' | null => (/hour/i.test(str(v)) ? 'hour' : /year|annual|month/i.test(str(v)) ? 'year' : null)
+
+function fromGlassdoor(j: Json): FoundJob | null {
+  const title = str(j.title)
+  if (!title) return null
+  const pay = (j.pay ?? {}) as Json
+  const loc = (j.location ?? {}) as Json
+  const unit = unitOf(pay.period)
+  const mult = /month/i.test(str(pay.period)) ? 12 : 1
+  const age = typeof j.ageInDays === 'number' ? j.ageInDays : 0
+  return finish({
+    id: 'gd-' + String(j.id),
+    title,
+    company: str((j.employer as Json)?.name),
+    city: str(loc.name),
+    province: provinceOf(str(loc.name)),
+    source: 'Glassdoor',
+    typeText: title,
+    salMin: num(pay.min) && num(pay.min)! * mult, salMax: num(pay.max) && num(pay.max)! * mult, salUnit: unit,
+    posted: new Date(Date.now() - age * 86400e3).toISOString(),
+    url: str(j.seoUrl) || str(j.url),
+    desc: htmlToText(str(j.description)),
+  })
+}
+
+function fromJobBank(j: Json): FoundJob | null {
+  const title = str(j.original_title) || str(j.title)
+  if (!title) return null
+  const name = str(j.source_name)
+  return finish({
+    id: 'jb-' + (str(j.internal_id) || str(j.stable_id)),
+    // Job Bank titles are often lower-case occupation names ("graphic designer").
+    title: title.charAt(0).toUpperCase() + title.slice(1),
+    company: str(j.employer),
+    city: str(j.city) || str(j.location).split(',')[0],
+    province: str(j.province) || provinceOf(str(j.location)),
+    source: 'Job Bank',
+    via: name && !/job ?bank/i.test(name) ? name : undefined,
+    typeText: str(j.employment_type),
+    salMin: num(j.salary_min), salMax: num(j.salary_max), salUnit: unitOf(j.salary_unit),
+    posted: str(j.date_posted),
+    url: str(j.url),
+    applyUrl: str(j.application_url) || str(j.url),
+    desc: htmlToText(str(j.description)),
+    modeText: str(j.work_type),
+    tags: [str(j.noc_title)].filter(Boolean),
+  })
+}
+
+function fromWorkopolis(j: Json): FoundJob | null {
+  const title = str(j.title)
+  if (!title) return null
+  const location = str(j.location)
+  const pay = parseLinkedInSalary(str(j.salary))
+  return finish({
+    id: 'wo-' + (str(j.jobKey) || str(j.url)).slice(-40),
+    title,
+    company: str(j.company),
+    city: location.split(',')[0].trim(),
+    province: provinceOf(location),
+    source: 'Workopolis',
+    typeText: str(j.employmentType),
+    ...pay,
+    posted: str(j.datePosted),
+    url: str(j.url),
+    desc: str(j.description_text) || htmlToText(str(j.description_html)) || str(j.snippet),
+    modeText: str(j.workSettings),
+    tags: str(j.requirements).split(/,\s*/).filter(Boolean),
+  })
+}
+
+function fromGoogle(j: Json): FoundJob | null {
+  const title = str(j.job_title)
+  if (!title) return null
+  const location = str(j.location).replace(/\s*\(\+\d+ others?\)/, '')
+  const salary = str(j.salary)
+  const pay = salary && salary !== 'N/A' ? parseLinkedInSalary(salary) : { salMin: null, salMax: null, salUnit: null }
+  const url = str(j.URL)
+  return finish({
+    id: 'gj-' + url.replace(/[^a-z0-9]/gi, '').slice(-40),
+    title,
+    company: str(j.company_name),
+    city: location.split(',')[0].trim(),
+    province: provinceOf(location),
+    source: 'Google Jobs',
+    via: str(j.posted_via) || undefined,
+    typeText: title,
+    ...pay,
+    posted: '',
+    url,
+    desc: str(j.description),
+  })
+}
+
 // ---------- Handler ----------
 
 export default async (req: Request) => {
@@ -215,7 +374,7 @@ export default async (req: Request) => {
   }
 
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
-  let body: { searches?: Search[]; sources?: string[] } = {}
+  let body: { searches?: Search[]; sources?: string[]; tasks?: Task[] } = {}
   try {
     body = await req.json()
   } catch {
@@ -224,15 +383,26 @@ export default async (req: Request) => {
   const searches = (body.searches ?? []).filter((s) => str(s.keywords)).slice(0, 4)
   const sources = (body.sources ?? []).filter((s): s is Source => s in SOURCES)
   if (!searches.length) return json({ error: 'bad_request', message: 'Add a job title to your profile so we know what to search for.' }, 400)
-  if (!sources.length) return json({ error: 'no_sources', message: 'Turn on LinkedIn or Indeed in Settings → Job sources.' }, 400)
+  if (!sources.length) return json({ error: 'no_sources', message: 'Turn on at least one source in Settings → Job sources.' }, 400)
 
-  const started = await Promise.all(sources.flatMap((source) => searches.map(async (s) => {
-    const run = await startRun(SOURCES[source].actor(), SOURCES[source].input(s), token)
-    return run.fail ? { source, fail: run.fail } : { source, id: run.id! }
-  })))
-  const runs = started.filter((r) => 'id' in r) as { source: Source; id: string }[]
-  if (!runs.length) return (started[0] as { fail: Response }).fail
-  return json({ runs }, 202)
+  // Every (source, search) pair to run. The browser sends back the ones that didn't fit yet as `tasks`.
+  const firstLocal = searches.indexOf(searches.find((s) => !s.remote) ?? searches[0])
+  const all: Task[] = sources.flatMap((source) => searches.map((_, i) => ({ source, search: i })))
+    .filter((t) => SOURCES[t.source].input(searches[t.search], t.search === firstLocal) !== null)
+  const todo = body.tasks?.filter((t) => t.source in SOURCES && searches[t.search]) ?? all
+
+  // Start runs one at a time until the account's concurrency limit is reached; queue the rest.
+  const runs: { source: Source; id: string }[] = []
+  const failed: string[] = []
+  let queued: Task[] = []
+  for (let k = 0; k < todo.length; k++) {
+    const t = todo[k]
+    const run = await startRun(SOURCES[t.source].actor(), SOURCES[t.source].input(searches[t.search], t.search === firstLocal)!, token)
+    if (run.id) runs.push({ source: t.source, id: run.id })
+    else if (run.busy) { queued = todo.slice(k); break }
+    else failed.push(`${t.source}: ${run.errorType ?? 'could not start'}`)
+  }
+  if (!runs.length && !queued.length) return failed.length ? json({ error: 'lookup_failed', message: `No search could start (${failed.join('; ')}).` }, 502) : json({ error: 'no_searches', message: 'Nothing to search: add a city in your preferences.' }, 400)
+  return json({ runs, queued, failed, total: all.length }, 202)
 }
-
 export const config = { path: '/api/jobs' }

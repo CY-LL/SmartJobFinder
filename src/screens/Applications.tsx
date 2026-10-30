@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { APP_STATUS_COLORS, fmtDate } from '../data'
 import type { AppStatus } from '../data'
 import { Seg, Status, useApp } from '../ui'
 import { CoverLetter, TailoredResume } from './Matches'
+import { printDoc } from './DocBox'
 
 const STATUSES: AppStatus[] = ['Applied', 'Interview', 'Offer', 'Rejected']
 
@@ -63,10 +64,12 @@ export function Applications() {
 export function AppDetail({ id }: { id: string }) {
   const { s, set, go } = useApp()
   const [viewing, setViewing] = useState<'resume' | 'cover' | null>(null)
+  const sheetEl = useRef<HTMLDivElement | null>(null)
   const a = s.apps.find((x) => x.id === id)
   if (!a) return <div className="screen"><button className="back" onClick={() => go('apps')}>← Applications</button><div className="empty">Application not found.</div></div>
 
   const job = { title: a.role, desc: a.desc, tags: a.tags }
+  const sent = viewing === 'resume' ? a.resumeHtml : viewing === 'cover' ? a.coverHtml : undefined
   const setStatus = (status: AppStatus) => {
     if (status === a.status) return
     const now = new Date().toISOString()
@@ -133,8 +136,16 @@ export function AppDetail({ id }: { id: string }) {
               <div className="ellip" style={{ fontSize: 14, fontWeight: 600 }}>{docs.find((d) => d.kind === viewing)!.name}</div>
               <button className="circle-btn" aria-label="Close" onClick={() => setViewing(null)}>✕</button>
             </div>
-            <div className="doc">
-              {viewing === 'resume' ? <TailoredResume job={job} /> : <CoverLetter job={job} company={a.company} />}
+            {sent ? (
+              <div className="doc" ref={sheetEl} dangerouslySetInnerHTML={{ __html: sent }} />
+            ) : (
+              <div className="doc" ref={sheetEl}>
+                {viewing === 'resume' ? <TailoredResume job={job} /> : <CoverLetter job={job} company={a.company} />}
+              </div>
+            )}
+            <div className="row">
+              <div className="xs muted">{sent ? 'Exactly as it was when you applied.' : 'Rebuilt from your current profile (this application was logged before copies were saved).'}</div>
+              <button className="chip" onClick={() => printDoc(sheetEl.current?.innerHTML ?? '', `${a.company} — ${viewing === 'resume' ? 'Resume' : 'Cover letter'}`)}>PDF</button>
             </div>
           </div>
         </div>

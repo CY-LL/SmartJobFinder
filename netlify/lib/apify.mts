@@ -7,7 +7,7 @@ export const json = (body: unknown, status = 200) => Response.json(body, { statu
 export const notConfigured = () => json({ error: 'not_configured', message: 'Job sources are not set up on this site yet (APIFY_TOKEN is missing).' }, 501)
 
 /** Calls the Apify API. Returns { data } on success or { fail } with a ready-made error response. */
-export async function apify(path: string, token: string, init?: RequestInit): Promise<{ data?: unknown; fail?: Response }> {
+export async function apify(path: string, token: string, init?: RequestInit): Promise<{ data?: unknown; fail?: Response; errorType?: string }> {
   const res = await fetch(`https://api.apify.com/v2/${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -15,12 +15,14 @@ export async function apify(path: string, token: string, init?: RequestInit): Pr
   if (res.ok) return { data: (await res.json()) as unknown }
   const detail = ((await res.json().catch(() => ({}))) as { error?: { type?: string; message?: string } }).error
   console.error('Apify error', path.split('?')[0], res.status, detail?.type, detail?.message)
-  return { fail: json({ error: 'lookup_failed', message: detail?.message ? `Apify: ${detail.message}` : `Apify returned ${res.status}.` }, 502) }
+  return { errorType: detail?.type ?? String(res.status), fail: json({ error: 'lookup_failed', message: detail?.message ? `Apify: ${detail.message}` : `Apify returned ${res.status}.` }, 502) }
 }
 
 export async function startRun(actor: string, input: Json, token: string) {
   const r = await apify(`acts/${encodeURIComponent(actor)}/runs?timeout=180`, token, { method: 'POST', body: JSON.stringify(input) })
-  return r.fail ? { fail: r.fail } : { id: (r.data as { data: { id: string } }).data.id }
+  // Apify plans cap how many runs go at once (5 on the free plan); callers queue the rest and retry.
+  const busy = !!r.errorType && /concurren|too-many|limit|429|402/i.test(r.errorType)
+  return r.fail ? { fail: r.fail, busy, errorType: r.errorType } : { id: (r.data as { data: { id: string } }).data.id }
 }
 
 export type RunState = { state: 'running' } | { state: 'done'; items: Json[] } | { state: 'failed'; message: string }

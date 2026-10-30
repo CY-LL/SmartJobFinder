@@ -12,6 +12,8 @@ export interface Job {
   province: string
   mode: 'On-site' | 'Hybrid' | 'Remote'
   source: string
+  /** The site a re-listed posting came from (e.g. a company careers page found through Google Jobs). */
+  via?: string
   type: string
   salary: string
   salMin: number | null
@@ -41,6 +43,9 @@ export interface Application {
   desc: string
   tags: string[]
   history: { e: string; d: string }[]
+  /** The resume and cover letter as they were when the user applied, edits included. */
+  resumeHtml?: string
+  coverHtml?: string
 }
 
 export const CITIES = ['Ottawa, ON', 'Gatineau, QC', 'Kanata, ON', 'Toronto, ON', 'Montréal, QC', 'Kingston, ON', 'Vancouver, BC', 'Calgary, AB', 'Edmonton, AB', 'Winnipeg, MB', 'Halifax, NS', 'Waterloo, ON', 'Mississauga, ON', 'Québec City, QC', 'Victoria, BC']
@@ -48,9 +53,16 @@ export const PROVINCES = ['ON', 'QC', 'BC', 'AB', 'MB', 'SK', 'NS', 'NB', 'NL', 
 export const JOB_TYPES = ['Regular paid', 'Contract', 'Freelance', 'Co-op', 'Internship', 'Volunteer']
 export const LEVELS = ['Junior', 'Intermediate', 'Expert']
 
-/** Sources with a working scraper behind /api/jobs. */
-export const LIVE_SOURCES = ['LinkedIn', 'Indeed']
-export const PLANNED_SOURCES = ['Glassdoor', 'Job Bank (Canada)', 'Company career pages', 'Workopolis']
+/** Sources searched through /api/jobs, with what each adds. */
+export const SOURCES: { name: string; note: string }[] = [
+  { name: 'LinkedIn', note: 'via Apify' },
+  { name: 'Indeed', note: 'via Apify' },
+  { name: 'Glassdoor', note: 'via Apify' },
+  { name: 'Job Bank', note: 'Government of Canada · via Apify' },
+  { name: 'Workopolis', note: 'via Apify' },
+  { name: 'Google Jobs', note: 'Includes company career pages · about $0.07 per search' },
+]
+export const SOURCE_NAMES = SOURCES.map((x) => x.name)
 
 export const APP_STATUS_COLORS: Record<AppStatus, [string, string]> = {
   Applied: ['var(--line-2)', 'var(--ink)'],
