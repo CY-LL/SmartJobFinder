@@ -62,6 +62,23 @@ function normalize(raw: Json) {
     .filter(Boolean)
   if (!skills.length) skills.push(...str(raw.topSkills).split(/\s*[•,|]\s*/).filter(Boolean))
 
+  // Portfolio, resume and personal-site links: the profile's websites, featured items and URLs in the About text.
+  const about = str(raw.about ?? raw.summary)
+  const featured = (raw.featured ?? {}) as Json
+  const links = [
+    ...((raw.websites ?? []) as unknown[]).map((w) => (typeof w === 'string' ? w : str((w as Json)?.url))),
+    str(featured.link),
+    ...((featured.slides ?? []) as Json[]).map((s) => str(s.url)),
+    ...(about.match(/https?:\/\/[^\s)]+/g) ?? []),
+  ].filter((u) => u && !/linkedin\.com|licdn\.com/i.test(u))
+
+  // Free text Claude can use when merging with those links.
+  const details = [
+    about && `About: ${about}`,
+    ...exps.map((x) => [str(x.title ?? x.position), str(x.companyName ?? x.company), dates(x), str(x.description)].filter(Boolean).join(' — ')),
+    ...((raw.education ?? []) as Json[]).map((x) => ['Education:', str(x.title ?? x.schoolName), str(x.subtitle ?? x.degree), str((x.period as Json)?.text ?? x.caption)].filter(Boolean).join(' ')),
+  ].filter(Boolean).join('\n').slice(0, 20_000)
+
   const name = str(raw.fullName) || [str(raw.firstName), str(raw.lastName)].filter(Boolean).join(' ')
   const loc = (raw.location ?? {}) as Json
   const city = str(raw.addressWithoutCountry ?? raw.addressWithCountry ?? raw.geoLocationName) || str(raw.location) || str((loc.parsed as Json)?.text) || str(loc.linkedinText)
@@ -76,6 +93,8 @@ function normalize(raw: Json) {
     skills: [...new Set(skills)].slice(0, 40),
     years,
     level: years >= 7 ? 'Expert' : years >= 3 ? 'Intermediate' : 'Junior',
+    links: [...new Set(links)].slice(0, 6),
+    details,
   }
 }
 

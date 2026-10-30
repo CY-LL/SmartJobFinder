@@ -4,6 +4,8 @@ export interface Role {
   title: string
   org: string
   dates: string
+  /** Achievements stated on the resume, when the reader found them. */
+  highlights?: string[]
 }
 
 export interface Profile {
@@ -13,6 +15,11 @@ export interface Profile {
   email: string
   phone: string
   linkedin: string
+  website?: string
+  summary?: string
+  education?: string[]
+  /** Who read it: Claude, or the built-in pattern rules. */
+  readBy?: 'claude' | 'rules'
   roles: Role[]
   skills: string[]
   years: number

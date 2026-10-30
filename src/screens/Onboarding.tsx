@@ -5,6 +5,7 @@ import type { Settings } from '../store'
 import { emptyProfile, levelFor, parseResume } from '../profile'
 import type { Profile, Role } from '../profile'
 import { extractText } from '../extract'
+import { MAX_PDF_BYTES, fileToBase64, profileAsText, readWithClaude } from '../ai'
 import { Seg, SectionHead, Stepper, Toggle, useApp, useProfile } from '../ui'
 
 export const ONB = ['upload', 'review', 'prefs', 'schedule'] as const
@@ -38,35 +39,72 @@ function prefsFrom(p: Profile): Partial<Settings> {
   }
 }
 
+type Panel = 'none' | 'linkedin' | 'website'
+
 export function Upload() {
   const { s, set, go } = useApp()
   const input = useRef<HTMLInputElement>(null)
   const [drag, setDrag] = useState(false)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
-  const [panel, setPanel] = useState<'none' | 'linkedin'>('none')
+  const [note, setNote] = useState('')
+  const [panel, setPanel] = useState<Panel>('none')
   const [url, setUrl] = useState('')
+  const [site, setSite] = useState('')
   const [fallback, setFallback] = useState(false)
+  const useClaude = s.reader === 'claude'
 
   const applyProfile = (profile: Profile, fileName: string) => {
     set({ profile, fileName, upload: 'done', skillOff: [], ...prefsFrom(profile) })
   }
+  const fail = (e: unknown, fallbackMsg: string) => setError(e instanceof Error ? e.message : fallbackMsg)
 
   const onFile = async (f?: File) => {
     if (input.current) input.current.value = ''
     if (!f) return
     setError('')
+    setNote('')
     if (!/\.(pdf|docx)$/i.test(f.name)) return setError(/\.doc$/i.test(f.name) ? 'Older .doc files can’t be read. Save it as .docx or PDF first.' : 'Please choose a PDF or DOCX file.')
     if (f.size > 10 * 1024 * 1024) return setError('That file is over 10 MB.')
-    setBusy(`Reading ${f.name}…`)
     try {
+      if (useClaude) {
+        setBusy(`Claude is reading ${f.name}…`)
+        try {
+          const isPdf = /\.pdf$/i.test(f.name)
+          const file = isPdf && f.size <= MAX_PDF_BYTES ? { name: f.name, pdf: await fileToBase64(f) } : { name: f.name, text: await extractText(f) }
+          const { profile } = await readWithClaude({ file })
+          return applyProfile(profile, f.name)
+        } catch (e) {
+          // Claude unavailable: fall through to the built-in reader and say so.
+          setNote(`${e instanceof Error ? e.message : 'Claude couldn’t read it.'} Read with the basic reader instead — check the next screen carefully.`)
+        }
+      }
+      setBusy(`Reading ${f.name}…`)
       const profile = parseResume(await extractText(f))
       if (!profile.name && !profile.roles.length && !profile.skills.length) {
         throw new Error('We couldn’t find any text in that file. If it’s a scanned image, export a text-based PDF or DOCX instead.')
       }
-      applyProfile(profile, f.name)
+      applyProfile({ ...profile, readBy: 'rules' }, f.name)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong reading that file.')
+      fail(e, 'Something went wrong reading that file.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const importWebsite = async () => {
+    setError('')
+    setNote('')
+    const u = site.trim()
+    if (!/^(https?:\/\/)?[\w-]+(\.[\w-]+)+/i.test(u)) return setError('Paste a link to your portfolio, personal site or online resume.')
+    if (!useClaude) return setError('Reading websites needs the Claude reader. Turn it on in Settings → Resume reader.')
+    setBusy('Claude is reading your site and any resume it links to…')
+    try {
+      const { profile, read } = await readWithClaude({ urls: [u] })
+      applyProfile(profile, read[0] ? `Website · ${new URL(read[0]).host}` : `Website · ${u}`)
+      if (read.length > 1) setNote(`Also read: ${read.slice(1).join(', ')}`)
+    } catch (e) {
+      fail(e, 'Couldn’t read that website.')
     } finally {
       setBusy('')
     }
@@ -74,6 +112,7 @@ export function Upload() {
 
   const importLinkedIn = async () => {
     setError('')
+    setNote('')
     setFallback(false)
     if (!/linkedin\.com\/in\/[\w%-]+/i.test(url)) return setError('Paste your profile link, e.g. linkedin.com/in/your-name.')
     setBusy('Looking up your LinkedIn profile… this can take up to a minute.')
@@ -92,8 +131,25 @@ export function Upload() {
         setError(data.message ?? (data.runId ? 'The LinkedIn lookup is taking too long. Try again in a minute.' : 'LinkedIn lookup isn’t available right now.'))
         return
       }
-      const handle = url.match(/linkedin\.com\/in\/([\w%-]+)/i)?.[1] ?? 'profile'
-      applyProfile({ ...emptyProfile(), ...data.profile, linkedin: data.profile.linkedin || url.trim() }, `LinkedIn · ${decodeURIComponent(handle)}`)
+      const handle = decodeURIComponent(url.match(/linkedin\.com\/in\/([\w%-]+)/i)?.[1] ?? 'profile')
+      const { links = [], details = '', ...li } = data.profile as Profile & { links?: string[]; details?: string }
+      let profile: Profile = { ...emptyProfile(), ...li, linkedin: li.linkedin || url.trim(), readBy: 'rules' }
+
+      // Follow the portfolio / resume links on the profile and merge what they say.
+      if (links.length && useClaude) {
+        setBusy(`Reading ${links.length === 1 ? 'the link' : `${links.length} links`} on the profile: ${links.map((l) => l.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)).join(', ')}…`)
+        try {
+          const merged = await readWithClaude({ urls: links, context: { name: `LinkedIn profile ${profile.linkedin}`, text: profileAsText(profile, details) } })
+          profile = { ...merged.profile, linkedin: profile.linkedin }
+          const missed = merged.skipped.length ? ` Couldn’t open: ${merged.skipped.join(', ')}.` : ''
+          setNote(`Combined LinkedIn with ${merged.read.join(', ')}.${missed}`)
+        } catch (e) {
+          setNote(`Imported LinkedIn only. ${e instanceof Error ? e.message : ''} Links on the profile: ${links.join(', ')}`)
+        }
+      } else if (links.length) {
+        setNote(`This profile links to ${links.join(', ')}. Turn on the Claude reader in Settings to include them.`)
+      }
+      applyProfile(profile, `LinkedIn · ${handle}`)
     } catch {
       setFallback(true)
       setError('LinkedIn lookup isn’t available right now.')
@@ -104,20 +160,23 @@ export function Upload() {
 
   const p = s.profile
   const profileLink = /linkedin\.com\/in\//i.test(url) ? (url.startsWith('http') ? url : 'https://' + url.trim()) : 'https://www.linkedin.com/in/me/'
+  const togglePanel = (x: Panel) => { setPanel(panel === x ? 'none' : x); setError('') }
+  const fieldStyle = { border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', background: '#fff' }
+  const smallBtn = { width: 'auto', padding: '10px 16px', fontSize: 14, borderRadius: 10 }
 
   return (
     <div className="screen" style={{ paddingTop: 28 }}>
       <div>
         <div className="eyebrow acc" style={{ marginBottom: 10 }}>SMARTJOBFINDER</div>
         <div className="display">Start with the resume you already have.</div>
-        <div className="lede">We read it once, then write a tailored version for every job we apply to on your behalf.</div>
+        <div className="lede">We read it once, then write a tailored version for every job you apply to.</div>
       </div>
       <input ref={input} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden onChange={(e) => onFile(e.target.files?.[0])} />
 
       {busy && (
         <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, borderRadius: 18 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div style={{ flex: 1, fontSize: 14 }}>{busy}</div>
+            <div style={{ flex: 1, fontSize: 14, minWidth: 0, overflowWrap: 'anywhere' }}>{busy}</div>
             <div className="spinner" />
           </div>
           <div className="progress"><div /></div>
@@ -139,28 +198,22 @@ export function Upload() {
             <div style={{ fontWeight: 500, fontSize: 15 }}>Upload resume</div>
             <div className="small muted">PDF or DOCX · up to 10 MB</div>
           </button>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn soft" aria-expanded={panel === 'linkedin'} onClick={() => { setPanel(panel === 'linkedin' ? 'none' : 'linkedin'); setError('') }}>Import from LinkedIn</button>
-            <button className="btn soft" onClick={() => input.current?.click()}>From Files</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn soft" aria-expanded={panel === 'linkedin'} onClick={() => togglePanel('linkedin')}>LinkedIn</button>
+            <button className="btn soft" aria-expanded={panel === 'website'} onClick={() => togglePanel('website')}>Website</button>
+            <button className="btn soft" onClick={() => input.current?.click()}>Files</button>
           </div>
 
           {panel === 'linkedin' && (
             <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 14, fontWeight: 600 }}>Your LinkedIn profile</div>
               <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); importLinkedIn() }}>
-                <input
-                  className="text-input"
-                  style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', background: '#fff' }}
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="linkedin.com/in/your-name"
-                  aria-label="LinkedIn profile URL"
-                  inputMode="url"
-                  autoFocus
-                />
-                <button className="btn" type="submit" style={{ width: 'auto', padding: '10px 16px', fontSize: 14, borderRadius: 10 }}>Import</button>
+                <input className="text-input" style={fieldStyle} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="linkedin.com/in/your-name" aria-label="LinkedIn profile URL" inputMode="url" autoFocus />
+                <button className="btn" type="submit" style={smallBtn}>Import</button>
               </form>
-              <div className="xs muted" style={{ lineHeight: 1.45 }}>We read your public profile once to fill in your experience and skills. Import your own profile only.</div>
+              <div className="xs muted" style={{ lineHeight: 1.45 }}>
+                We read your public profile once{useClaude ? ', plus any portfolio or resume it links to' : ''}. Import your own profile only.
+              </div>
               {(fallback || !error) && (
                 <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div className="small" style={{ fontWeight: 500 }}>{fallback ? 'Use your LinkedIn PDF instead' : 'Or upload LinkedIn’s PDF'}</div>
@@ -174,6 +227,17 @@ export function Upload() {
               )}
             </div>
           )}
+
+          {panel === 'website' && (
+            <div className="card" style={{ borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Portfolio or online resume</div>
+              <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); importWebsite() }}>
+                <input className="text-input" style={fieldStyle} value={site} onChange={(e) => setSite(e.target.value)} placeholder="yourname.com or a resume link" aria-label="Website URL" inputMode="url" autoFocus />
+                <button className="btn" type="submit" style={smallBtn}>Read</button>
+              </form>
+              <div className="xs muted" style={{ lineHeight: 1.45 }}>Works with personal sites and portfolios, PDF links, and shared Google Docs, Google Drive or Dropbox files. If the page links to a resume or CV, we read that too.</div>
+            </div>
+          )}
         </>
       )}
 
@@ -183,19 +247,26 @@ export function Upload() {
         <>
           <div className="card" style={{ padding: 20, borderRadius: 18 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div className="file-ico">{s.fileName.startsWith('LinkedIn') ? 'IN' : /\.docx$/i.test(s.fileName) ? 'DOC' : 'PDF'}</div>
+              <div className="file-ico">{s.fileName.startsWith('LinkedIn') ? 'IN' : s.fileName.startsWith('Website') ? 'WEB' : /\.docx$/i.test(s.fileName) ? 'DOC' : 'PDF'}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="ellip" style={{ fontSize: 14.5, fontWeight: 500 }}>{s.fileName || 'Sample profile'}</div>
-                <div className="small" style={{ color: 'var(--green)' }}>{p ? `Read · ${p.roles.length} ${p.roles.length === 1 ? 'role' : 'roles'} · ${p.skills.length} skills` : 'Sample data'}</div>
+                <div className="ellip" style={{ fontSize: 14.5, fontWeight: 500 }}>{s.fileName || 'Your profile'}</div>
+                <div className="small" style={{ color: 'var(--green)' }}>
+                  {p ? `${p.readBy === 'claude' ? 'Read by Claude' : 'Read'} · ${p.roles.length} ${p.roles.length === 1 ? 'role' : 'roles'} · ${p.skills.length} skills` : ''}
+                </div>
               </div>
-              <button className="u muted" onClick={() => { set({ upload: 'idle' }); setError('') }}>Replace</button>
+              <button className="u muted" onClick={() => { set({ upload: 'idle' }); setError(''); setNote('') }}>Replace</button>
             </div>
           </div>
+          {note && <div className="xs muted" style={{ lineHeight: 1.45, overflowWrap: 'anywhere' }}>{note}</div>}
           <button className="btn" onClick={() => go('review')}>Review what we found</button>
         </>
       )}
 
-      <div className="xs faint pretty">Your resume is read in your browser and stays private. It's only sent to employers you've matched with, as a tailored copy saved in your Applications log.</div>
+      <div className="xs faint pretty">
+        {useClaude
+          ? 'Your resume is sent to Anthropic’s Claude API to be read. You can switch to the basic in-browser reader in Settings.'
+          : 'Your resume is read in your browser with the basic reader and isn’t sent anywhere.'}
+      </div>
     </div>
   )
 }
@@ -232,6 +303,7 @@ export function Review() {
         <Field label="Headline" value={p.title} placeholder="e.g. Product Designer" onChange={(v) => edit({ title: v })} />
         <Field label="Location" value={p.city} placeholder="City, Province" onChange={(v) => edit({ city: v })} />
         <Field label="Email" value={p.email} placeholder="you@example.com" onChange={(v) => edit({ email: v })} />
+        <Field label="Website" value={p.website ?? ''} placeholder="Portfolio link" onChange={(v) => edit({ website: v })} />
         <div className="li" style={{ padding: '10px 0' }}>
           <div>
             <div className="serif" style={{ fontSize: 22 }}>{p.level}</div>

@@ -113,14 +113,17 @@ export function TailoredResume({ job }: { job: JobLike }) {
       <div className="muted" style={{ fontSize: '0.95em', marginBottom: 10 }}>{[p.title, p.city, p.email].filter(Boolean).join(' · ')}</div>
       <div className="sec">SUMMARY</div>
       <div className="mb">
-        {p.title || 'Professional'}{p.years > 0 && ` with ${p.years} years of experience`}.{' '}
+        {p.summary || <>{p.title || 'Professional'}{p.years > 0 && ` with ${p.years} years of experience`}.</>}{' '}
         {matched.length > 0 && <span className="hl">Brings {matched.slice(0, 4).join(', ')} to the {job.title} role.</span>}
       </div>
       <div className="sec">EXPERIENCE</div>
       <div className="mb">
         {p.roles.length === 0 && <div className="muted">No roles on your profile yet.</div>}
         {p.roles.map((r, i) => (
-          <div key={i} style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
+          <div key={i} style={{ marginBottom: r.highlights?.length ? 4 : 0 }}>
+            <div style={{ fontWeight: 500 }}>{r.title}{r.org && ` — ${r.org}`}{r.dates && `, ${r.dates.replace('NOW', 'now')}`}</div>
+            {i < 3 && r.highlights?.slice(0, 3).map((h) => <div key={h}>• {h}</div>)}
+          </div>
         ))}
       </div>
       <div className="sec">SKILLS</div>

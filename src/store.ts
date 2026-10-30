@@ -21,6 +21,8 @@ export interface Settings {
   freq: 'Daily' | 'Weekdays' | 'Weekly'
   time: string
   noReapply: boolean
+  /** How uploaded resumes and websites are read. */
+  reader: 'claude' | 'rules'
   conn: Record<string, boolean>
   /** Postings from the latest searches, newest search first. */
   jobs: Job[]
@@ -48,6 +50,7 @@ export const DEFAULTS: Settings = {
   freq: 'Weekdays',
   time: '07:00',
   noReapply: true,
+  reader: 'claude',
   conn: { LinkedIn: true, Indeed: true },
   jobs: [],
   jobStatus: {},
