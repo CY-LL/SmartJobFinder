@@ -197,3 +197,26 @@ export function tailor(p: Profile, skills: string[], job: Pick<Job, 'title' | 'd
 
   return { matched, rest: skills.filter((k) => !matched.includes(k)), summary, roles, best, education, educationFirst, bestEducation }
 }
+
+/** Plain-language reason a posting is hidden, for the "show hidden" view. */
+export function hiddenReason(job: Job, s: Settings, match: number): string {
+  switch (filteredOut(job, s)) {
+    case 'job type':
+      return `${job.type} isn't one of your job types`
+    case 'no salary listed':
+      return 'No salary listed (you turned these off)'
+    case 'salary':
+      return `Pays ${job.salary || 'less'}, under your minimum of ${s.salPer === 'Hourly' ? `$${s.salMin}/hr` : `$${s.salMin}k`}`
+    case 'experience':
+      return `Asks for ${job.yrs} years; your limit is ${s.years}`
+    case 'location':
+      return job.mode === 'Remote' ? `Remote in ${job.province}, outside your provinces` : `${job.loc} isn't one of your cities`
+    case 'source':
+      return `${job.source} is turned off`
+    default:
+      return match < MIN_SCORE ? `Low match (${match}%)` : ''
+  }
+}
+
+/** Postings scoring below this are hidden unless the user asks to see everything. */
+export const MIN_SCORE = 30

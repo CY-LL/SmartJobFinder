@@ -3,7 +3,7 @@ import { JOB_STATUS, SOURCE_NAMES, ago, fmtDate } from '../data'
 import type { Application, Job } from '../data'
 import { nextRun } from '../store'
 import { MIN_MATCH, Status, useApp, useJobs, useProfile, visibleJobs } from '../ui'
-import { endYearOf, tailor } from '../match'
+import { endYearOf, hiddenReason, tailor } from '../match'
 import type { Tailored, TailoredEducation } from '../match'
 import { DocBox, printDoc, sanitize } from './DocBox'
 
@@ -14,11 +14,15 @@ export function Matches() {
   const all = useJobs()
   const [filter, setFilter] = useState<Filter>('New')
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [showHidden, setShowHidden] = useState(false)
 
   const shown = visibleJobs(all)
-  const list = shown.filter((j) => filter === 'All' ? j.status !== 'skipped' : filter === 'New' ? j.status === 'new' : j.status === 'applied')
+  const visible = new Set(shown.map((j) => j.id))
+  // "Show hidden" lists every posting from the last search, each hidden one labelled with why.
+  const pool = showHidden ? all : shown
+  const list = pool.filter((j) => filter === 'All' ? j.status !== 'skipped' : filter === 'New' ? j.status === 'new' : j.status === 'applied')
   const hiddenCount = all.length - shown.length
-  const counts = { New: shown.filter((j) => j.status === 'new').length, Applied: shown.filter((j) => j.status === 'applied').length }
+  const counts = { New: pool.filter((j) => j.status === 'new').length, Applied: pool.filter((j) => j.status === 'applied').length }
   const sources = SOURCE_NAMES.filter((k) => s.conn[k] !== false)
 
   return (
@@ -52,6 +56,11 @@ export function Matches() {
             {f}{f !== 'All' && counts[f] > 0 ? ` · ${counts[f]}` : ''}
           </button>
         ))}
+        {hiddenCount > 0 && (
+          <button className={`chip ${showHidden ? 'on' : ''}`} aria-pressed={showHidden} onClick={() => setShowHidden(!showHidden)} style={{ marginLeft: 'auto' }}>
+            {showHidden ? 'Hide filtered out' : `Show hidden · ${hiddenCount}`}
+          </button>
+        )}
       </div>
       <div className="stack">
         {list.length === 0 && (
@@ -65,8 +74,9 @@ export function Matches() {
         {list.map((j) => {
           const st = JOB_STATUS[j.status]
           const ex = !!open[j.id]
+          const hidden = !visible.has(j.id)
           return (
-            <div key={j.id} className="job-card" role="link" tabIndex={0} onClick={() => go(`job/${j.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`job/${j.id}`)}>
+            <div key={j.id} style={hidden ? { opacity: 0.8, borderStyle: 'dashed' } : undefined} className="job-card" role="link" tabIndex={0} onClick={() => go(`job/${j.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`job/${j.id}`)}>
               <div className="row" style={{ alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 500 }}>{j.title}</div><div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{j.company} · {j.loc}</div></div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}><div className="pct">{j.match}%</div><div className="muted" style={{ fontSize: 10.5 }}>match</div></div>
@@ -75,6 +85,7 @@ export function Matches() {
                 <div className="meta">{[j.type, j.mode, j.salary, j.via ? `${j.source} (${j.via})` : j.source, ago(j.posted)].filter(Boolean).join(' · ')}</div>
                 <Status colors={st}>{st[0]}</Status>
               </div>
+              {hidden && <div className="xs" style={{ color: 'var(--acc-fg)' }}>Hidden · {j.hidden === 'source' ? `${j.source} is turned off` : hiddenReason(j, s, j.match)}</div>}
               {ex && (
                 <div className="expand">
                   <div className="pretty" style={{ fontSize: 13 }}>{j.desc.slice(0, 320)}{j.desc.length > 320 ? '…' : ''}</div>
@@ -90,7 +101,10 @@ export function Matches() {
       </div>
       {hiddenCount > 0 && !search.running && (
         <div className="xs muted" style={{ textAlign: 'center' }}>
-          {hiddenCount} other {hiddenCount === 1 ? 'posting was' : 'postings were'} left out by your preferences or scored under {MIN_MATCH}%. <button className="link" style={{ fontSize: 12 }} onClick={() => go('prefs')}>Adjust preferences</button>
+          {showHidden
+            ? <>Showing all {all.length} postings from the last search; dashed cards are normally hidden. </>
+            : <>{hiddenCount} other {hiddenCount === 1 ? 'posting was' : 'postings were'} left out by your preferences or scored under {MIN_MATCH}%. <button className="link" style={{ fontSize: 12 }} onClick={() => setShowHidden(true)}>Show them</button> · </>}
+          <button className="link" style={{ fontSize: 12 }} onClick={() => go('prefs')}>Adjust preferences</button>
         </div>
       )}
     </div>

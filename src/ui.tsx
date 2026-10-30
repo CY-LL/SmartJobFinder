@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { Job, JobStatus } from './data'
 import { emptyProfile } from './profile'
 import type { Profile } from './profile'
-import { filteredOut, scoreJob } from './match'
+import { MIN_SCORE, filteredOut, scoreJob } from './match'
 import type { Scored } from './match'
 import type { Settings, Patch } from './store'
 import type { SearchState } from './search'
@@ -42,7 +42,7 @@ export function useJobs(): ScoredJob[] {
 }
 
 /** Jobs worth showing: pass the user's filters and clear a minimum match. */
-export const MIN_MATCH = 30
+export const MIN_MATCH = MIN_SCORE
 export const visibleJobs = (jobs: ScoredJob[]) => jobs.filter((j) => !j.hidden && (j.match >= MIN_MATCH || j.status !== 'new'))
 
 export function Seg<T extends string>({ options, value, onChange, size, labels }: {
