@@ -1,6 +1,6 @@
 // Job alert emails: reads LinkedIn and Indeed alerts the user has put in one Gmail label.
 //   POST /api/mail { script, key, days }          → { jobs, emails, alerts, failed }
-//   POST /api/mail { script, key, check: true }   → { label, count }   (connection check)
+//   POST /api/mail { script, key, check: true }   → { label, count, subjects }   (connection check)
 //   POST /api/mail { emls: [raw, …] }             → the same as the first, from alert emails saved as .eml files
 // Gmail is read through a Google Apps Script the user installs in their own account (see src/gmailScript.ts):
 // it has read-only Gmail access, only searches its one label, and answers only to its secret key.
@@ -77,7 +77,7 @@ export default async (req: Request) => {
 
   const { data, fail } = await askScript(script, { key, days, check: !!body.check })
   if (fail) return fail
-  if (body.check) return json({ label: str(data!.label), count: Number(data!.count) || 0 })
+  if (body.check) return json({ label: str(data!.label), count: Number(data!.count) || 0, subjects: (Array.isArray(data!.subjects) ? data!.subjects : []).map(String).slice(0, 10) })
   const raws = (Array.isArray(data!.emails) ? data!.emails : []).filter((x): x is string => typeof x === 'string')
     // Gmail sends each email base64-encoded; Node's base64 decoder also reads the URL-safe alphabet.
     .map((x) => Buffer.from(x, 'base64'))

@@ -18,7 +18,7 @@ export function Alerts() {
   const { s, set, go, toast } = useApp()
   const label = s.mailFolder || 'joboffers'
   const [url, setUrl] = useState(s.mailScript)
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  const [status, setStatus] = useState<{ ok: boolean; text: string; subjects: string[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
@@ -47,7 +47,7 @@ export function Alerts() {
     if (!SCRIPT_URL_RE.test(v)) throw new Error('Paste the web app URL from Apps Script. It starts with https://script.google.com/macros/s/ and ends with /exec.')
     const data = await post({ script: v, key: s.mailKey, check: true, days: s.postedWithin ?? 7 })
     set({ mailScript: v })
-    setStatus({ ok: true, text: `Connected · ${data.count} ${data.count === 1 ? 'email' : 'emails'} in “${data.label}” from the last ${s.postedWithin ?? 7} days` })
+    setStatus({ ok: true, text: `Connected · ${data.count} ${data.count === 1 ? 'email' : 'emails'} in “${data.label}” from the last ${s.postedWithin ?? 7} days`, subjects: data.subjects ?? [] })
     toast('Gmail connected')
   })
 
@@ -92,6 +92,12 @@ export function Alerts() {
         <div className="card" style={card}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Gmail connected</div>
           {status && <div className="small" style={{ color: 'var(--green)' }}>{status.text}</div>}
+          {status && status.subjects.length > 0 && (
+            <div className="xs" style={{ lineHeight: 1.5 }}>
+              <div className="muted">The app can see these emails (up to 10). Each should be a job alert you filed under “{label}”:</div>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{status.subjects.map((t, i) => <li key={i} className="ellip">{t}</li>)}</ul>
+            </div>
+          )}
           <div className="xs muted" style={{ lineHeight: 1.45 }}>Read-only, through the script in your Gmail. Only the “{label}” label is read; nothing is marked read, moved, deleted or sent.</div>
           <button className="btn sm" disabled={busy} onClick={() => void readNow()}>{busy ? 'Reading…' : `Read the last ${s.postedWithin ?? 7} days now`}</button>
           <button className="link" style={{ fontSize: 12, alignSelf: 'flex-start' }} onClick={() => { set({ mailScript: '' }); setStatus(null) }}>Disconnect</button>

@@ -21,21 +21,34 @@ const MAX_EMAILS = 50;
 function doPost(e) {
   let req = {};
   try { req = JSON.parse(e.postData.contents); } catch (err) {}
-  if (req.key !== KEY) return reply({ error: 'bad_key' });
+  if (typeof req.key !== 'string' || req.key !== KEY) return reply({ error: 'bad_key' });
 
-  const labels = Gmail.Users.Labels.list('me').labels || [];
-  if (!labels.some(function (l) { return l.name.toLowerCase() === LABEL.toLowerCase(); })) {
-    return reply({ error: 'no_label', label: LABEL });
+  // Nothing in the request can choose what is read: the label is fixed above, and the only other
+  // input is a number of days.
+  const label = (Gmail.Users.Labels.list('me').labels || []).filter(function (l) {
+    return l.name.toLowerCase() === LABEL.toLowerCase();
+  })[0];
+  if (!label) return reply({ error: 'no_label', label: LABEL });
+  const days = Math.max(1, Math.min(30, Math.floor(Number(req.days)) || 7));
+  // Gmail is asked by the label's id, not a search for its name, so no other mail can match.
+  const found = Gmail.Users.Messages.list('me', { labelIds: [label.id], q: 'newer_than:' + days + 'd', maxResults: MAX_EMAILS }).messages || [];
+  // Each email is checked again for the label before anything from it is shared.
+  const labelled = function (msg) { return (msg.labelIds || []).indexOf(label.id) >= 0; };
+
+  if (req.check) {
+    // Subjects of the first emails, so you can see exactly which emails the app can read.
+    const subjects = [];
+    found.slice(0, 10).forEach(function (m) {
+      const msg = Gmail.Users.Messages.get('me', m.id, { format: 'metadata', metadataHeaders: ['Subject'] });
+      if (labelled(msg)) subjects.push(((msg.payload && msg.payload.headers) || []).map(function (h) { return h.value; })[0] || '(no subject)');
+    });
+    return reply({ label: LABEL, count: found.length, subjects: subjects });
   }
-  const days = Math.max(1, Math.min(30, Number(req.days) || 7));
-  // Gmail search writes spaces and slashes in label names as hyphens.
-  const query = 'label:' + LABEL.trim().replace(/[\\s/]+/g, '-') + ' newer_than:' + days + 'd';
-  const found = Gmail.Users.Messages.list('me', { q: query, maxResults: MAX_EMAILS }).messages || [];
-  if (req.check) return reply({ label: LABEL, count: found.length });
 
-  const emails = found.map(function (m) {
-    const raw = Gmail.Users.Messages.get('me', m.id, { format: 'raw' }).raw;
-    return typeof raw === 'string' ? raw : Utilities.base64EncodeWebSafe(raw);
+  const emails = [];
+  found.forEach(function (m) {
+    const msg = Gmail.Users.Messages.get('me', m.id, { format: 'raw' });
+    if (labelled(msg)) emails.push(typeof msg.raw === 'string' ? msg.raw : Utilities.base64EncodeWebSafe(msg.raw));
   });
   return reply({ label: LABEL, emails: emails });
 }

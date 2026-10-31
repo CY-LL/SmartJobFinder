@@ -14,6 +14,7 @@ export interface Ctx {
   go: (path: string) => void
   toast: (msg: string) => void
   reset: () => void
+  replace: (next: Settings) => void
   search: SearchState & { run: () => Promise<void> }
 }
 

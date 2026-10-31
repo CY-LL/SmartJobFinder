@@ -48,6 +48,7 @@ Gmail is read through a Google Apps Script the user installs in their own accoun
 - has read-only Gmail access (`gmail.readonly`), so it can't send, change or delete mail
 - only searches the one label written into it, from the "posted within" window (up to 50 emails)
 - answers only to a random key written into it, which the app keeps in the browser
+- asks Gmail for messages by the label's id (not a search for its name) and checks each message still carries the label before returning it; nothing in a request can change what is read
 - is deployed as a web app that runs as the user, open to "Anyone" so the function can call it; the key keeps others out
 
 No mail password is stored anywhere, and access can be revoked at myaccount.google.com/permissions. The function only calls `https://script.google.com/macros/s/…/exec` addresses. A Gmail filter (`from:(jobalerts-noreply@linkedin.com OR alert@indeed.com)` → label `joboffers`) files alerts automatically. Without Gmail, alert emails saved as `.eml` files can be added on the same page.
@@ -72,6 +73,8 @@ What gets searched ([`src/match.ts`](src/match.ts) `searchesFor`): the user's jo
 Runs start in the background and the browser polls until they finish. The free Apify plan runs at most 5 scrapers at once, so the function starts what fits and returns the rest as `queued`; the browser starts those as earlier runs finish. Results are de-duplicated across sites, then scored and filtered in the browser ([`src/match.ts`](src/match.ts)). A full search costs roughly $0.60 of Apify credit with every source on and the default titles and roles; each source can be switched off in Settings.
 
 There's no server-side scheduler or user accounts: a scheduled search runs when the app is open and one is due, and all data lives in the browser's local storage.
+
+Settings → Backup saves everything (profile, preferences, sources, saved jobs, applications with the documents sent, and the Gmail connection) to a `smartjobfinder-backup-<date>.json` file ([`src/backup.ts`](src/backup.ts)). Restoring it, from Settings or from the first screen, brings the app back after browser data is cleared or on another device. The file includes the Gmail script key, so it should be kept private.
 
 ## Applying
 

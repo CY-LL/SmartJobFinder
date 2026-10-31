@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { SOURCES, fmtDate } from '../data'
+import { readBackup, saveBackup } from '../backup'
+import { SOURCES, ago, fmtDate } from '../data'
 import type { Application, Employer } from '../data'
 import { fmtSalary } from '../store'
 import { suggestedSkillRoles, suggestedTitles } from '../match'
@@ -64,6 +65,8 @@ export function Settings() {
         <div className="xs muted" style={{ padding: '0 4px', lineHeight: 1.45 }}>Read through Apify scrapers, which use your Apify credit (about $0.60 per search with all six on; turn sites off to spend less). You apply on the employer's site; SmartJobFinder prepares your documents and keeps the log.</div>
       </div>
 
+      <BackupSection />
+
       <div className="stack" style={{ gap: 8 }}>
         <div className="eyebrow" style={{ padding: '0 4px' }}>ACCOUNT</div>
         <div className="list">
@@ -72,7 +75,7 @@ export function Settings() {
           <button className="li" onClick={() => { if (confirm('Clear found jobs? Your profile, preferences and applications stay.')) { set({ jobs: [], jobStatus: Object.fromEntries(Object.entries(s.jobStatus).filter(([k]) => s.apps.some((a) => a.jobId === k))), lastRun: null }); toast('Found jobs cleared') } }}><span>Clear found jobs</span><span className="muted">›</span></button>
           <button className="li" onClick={() => { if (confirm('Start over? This deletes your profile, preferences, found jobs and applications from this browser.')) { reset(); go('upload') } }}><span>Start over</span><span className="muted">›</span></button>
         </div>
-        <div className="xs muted" style={{ padding: '0 4px', lineHeight: 1.45 }}>Everything is stored in this browser only. Searches run when the app is open and one is due.</div>
+        <div className="xs muted" style={{ padding: '0 4px', lineHeight: 1.45 }}>Everything is stored in this browser only, so save a backup now and then. Searches run when the app is open and one is due.</div>
       </div>
     </div>
   )
@@ -148,6 +151,48 @@ function EmployerList() {
         <button className="btn sm" style={{ width: 'auto', padding: '10px 16px' }} type="submit" disabled={busy || !link.trim()}>{busy ? 'Checking…' : 'Add'}</button>
       </form>
       {error && <div className="xs" style={{ color: 'var(--acc-fg)', lineHeight: 1.45 }}>{error}</div>}
+    </div>
+  )
+}
+
+/** Save everything to a file, and restore it after browser data is cleared or on another device. */
+function BackupSection() {
+  const { s, set, toast, replace } = useApp()
+  const [error, setError] = useState('')
+  const since = s.apps.length - (s.lastBackup?.apps ?? 0)
+  const status = !s.lastBackup
+    ? 'No backup saved yet'
+    : `Last backup ${ago(s.lastBackup.at).toLowerCase() || fmtDate(s.lastBackup.at)}${since > 0 ? ` · ${since} new ${since === 1 ? 'application' : 'applications'} since` : ''}`
+  const stale = !s.lastBackup || since > 0 || Date.now() - new Date(s.lastBackup.at).getTime() > 14 * 86400e3
+
+  const restore = async (f?: File) => {
+    if (!f) return
+    setError('')
+    try {
+      const next = await readBackup(f)
+      if (s.profile && !confirm(`Replace everything in this browser with the backup from ${fmtDate(next.lastBackup!.at)}?`)) return
+      replace(next)
+      toast('Backup restored')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That backup couldn’t be read.')
+    }
+  }
+
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="eyebrow" style={{ padding: '0 4px' }}>BACKUP</div>
+      <div className="list">
+        <button className="li" onClick={() => { set({ lastBackup: { at: saveBackup(s), apps: s.apps.length } }); toast('Backup saved to your Downloads folder') }}>
+          <div style={{ textAlign: 'left' }}><div>Save backup</div><div className="xs" style={{ color: stale ? 'var(--acc-fg)' : 'var(--green)' }}>{status}</div></div>
+          <span className="muted">↓</span>
+        </button>
+        <label className="li" style={{ cursor: 'pointer' }}>
+          <span>Restore from backup</span><span className="muted">›</span>
+          <input type="file" accept=".json,application/json" hidden onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = '' }} />
+        </label>
+      </div>
+      {error && <div className="xs" style={{ color: 'var(--acc-fg)', padding: '0 4px', lineHeight: 1.45 }}>{error}</div>}
+      <div className="xs muted" style={{ padding: '0 4px', lineHeight: 1.45 }}>The file holds your profile, preferences, sources, saved jobs, applications with the documents you sent, and your Gmail connection. Keep it somewhere private: anyone with it could read your job-alert label.</div>
     </div>
   )
 }

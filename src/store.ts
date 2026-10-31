@@ -42,6 +42,8 @@ export interface Settings {
   docs: Record<string, { resume?: string; cover?: string }>
   apps: Application[]
   lastRun: { at: string; found: number; failed: string[] } | null
+  /** When a backup file was last saved, and how many applications it held. */
+  lastBackup: { at: string; apps: number } | null
 }
 
 export const DEFAULTS: Settings = {
@@ -76,6 +78,7 @@ export const DEFAULTS: Settings = {
   docs: {},
   apps: [],
   lastRun: null,
+  lastBackup: null,
 }
 
 const KEY = 'sjf:v2'
@@ -116,7 +119,9 @@ export function useSettings() {
   }, [s])
   const set = useCallback((p: Patch) => setS((prev) => ({ ...prev, ...(typeof p === 'function' ? p(prev) : p) })), [])
   const reset = useCallback(() => setS(DEFAULTS), [])
-  return [s, set, reset] as const
+  /** Replaces everything at once, for restoring a backup. */
+  const replace = useCallback((next: Settings) => setS(next), [])
+  return [s, set, reset, replace] as const
 }
 // Hash-based routing so the browser back button and deep links work on any static host.
 export function useRoute(): [string[], (path: string) => void] {

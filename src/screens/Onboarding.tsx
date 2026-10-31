@@ -1,3 +1,4 @@
+import { readBackup } from '../backup'
 import { useRef, useState } from 'react'
 import { CITIES, JOB_TYPES, LEVELS, PROVINCES } from '../data'
 import { fmtSalary, toggleIn } from '../store'
@@ -41,6 +42,33 @@ function prefsFrom(p: Profile): Partial<Settings> {
 }
 
 type Panel = 'none' | 'linkedin' | 'website'
+
+/** Back after clearing the browser, or on a new device: one file brings everything back. */
+function RestoreLink() {
+  const { replace, go, toast } = useApp()
+  const [error, setError] = useState('')
+  const restore = async (f?: File) => {
+    if (!f) return
+    setError('')
+    try {
+      const next = await readBackup(f)
+      replace(next)
+      toast('Backup restored')
+      go(next.onboarded ? 'matches' : 'upload')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That backup couldn’t be read.')
+    }
+  }
+  return (
+    <div className="small" style={{ marginTop: 12 }}>
+      <label className="link" style={{ cursor: 'pointer' }}>
+        Used SmartJobFinder before? Restore from a backup
+        <input type="file" accept=".json,application/json" hidden onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = '' }} />
+      </label>
+      {error && <div className="xs" style={{ color: 'var(--acc-fg)', marginTop: 6, lineHeight: 1.45 }}>{error}</div>}
+    </div>
+  )
+}
 
 export function Upload() {
   const { s, set, go } = useApp()
@@ -187,6 +215,7 @@ export function Upload() {
         <div className="eyebrow acc" style={{ marginBottom: 10 }}>SMARTJOBFINDER</div>
         <div className="display">Start with the resume you already have.</div>
         <div className="lede">We read it once, then write a tailored version for every job you apply to.</div>
+        <RestoreLink />
       </div>
       <input ref={input} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden onChange={(e) => onFile(e.target.files?.[0])} />
 

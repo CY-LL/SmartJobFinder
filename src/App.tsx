@@ -42,7 +42,7 @@ function Nav({ active }: { active: string }) {
 }
 
 export default function App() {
-  const [s, set, reset] = useSettings()
+  const [s, set, reset, replace] = useSettings()
   const [parts, go] = useRoute()
   const [toastMsg, setToastMsg] = useState('')
   const toastTimer = useRef(0)
@@ -53,7 +53,7 @@ export default function App() {
   }, [])
 
   const search = useSearch(s, set)
-  const ctx: Ctx = { s, set, go, toast, reset, search }
+  const ctx: Ctx = { s, set, go, toast, reset, replace, search }
 
   const [screen, param] = parts
   const onbIdx = ONB.indexOf(screen as (typeof ONB)[number])
